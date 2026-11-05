@@ -1,0 +1,8 @@
+**
+!requirements.txt
+!backend/
+!backend/__init__.py
+!backend/app.py
+!backend/catalog.py
+!backend/database.py
+!backend/schemas.py
