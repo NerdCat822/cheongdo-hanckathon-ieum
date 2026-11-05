@@ -378,6 +378,7 @@ function DraftPanel({ integration, loading, error, onReview }: { integration?: I
     {result && <div className="draft-results" aria-live="polite">
       <p><strong>참고 홈페이지:</strong> {url ? <a href={url} target="_blank" rel="noopener noreferrer">{result.source.provider} · {result.source.title} ↗</a> : '출처 확인 필요'} · 확인일 {result.source.checked_at ?? '미확인'}</p>
       <p>{result.source.summary} 일반 홈페이지는 구체적인 제도 내용의 근거가 아닙니다. 실제 내용은 기관에 확인하세요.</p>
+      {result.evidence && <div className="public-detail"><PublicAttribution source={result.evidence.source} retrievedAt={result.evidence.retrieved_at} /><p>실시간 조회한 감염병 명칭: {result.evidence.items.map((item) => item.name).join(', ')}</p><p>명칭 목록은 개인의 접종 대상이나 의료 판단 근거가 아닙니다.</p></div>}
       {result.drafts.length === 0 && <p>모든 초안을 검토했습니다.</p>}
       {result.drafts.map((draft, index) => <article className="draft-item" key={`${index}-${draft.title}`}><div><h3>{draft.title}</h3><p>{draft.description}</p><p><strong>확인 필요:</strong> {draft.uncertainty}</p></div><div className="draft-actions"><button type="button" className="button button-secondary" onClick={() => onReview(draft, () => setResult((current) => current && ({ ...current, drafts: current.drafts.filter((_, itemIndex) => itemIndex !== index) })))}>검토·수정</button><button type="button" className="text-button" onClick={() => setResult((current) => current && ({ ...current, drafts: current.drafts.filter((_, itemIndex) => itemIndex !== index) }))}>거절</button></div></article>)}
     </div>}

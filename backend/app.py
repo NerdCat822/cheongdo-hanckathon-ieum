@@ -31,8 +31,8 @@ KNOWN_FIELDS = {
 def create_app(database=None, draft_service=None, public_data_service=None):
     app = FastAPI(title="가상 가족 돌봄 시연 API", description=DEMO_WARNING, version="1.0")
     app.state.database = database if database is not None else Database()
-    app.state.draft_service = draft_service if draft_service is not None else CopilotDraftService()
     app.state.public_data = public_data_service if public_data_service is not None else PublicDataService()
+    app.state.draft_service = draft_service if draft_service is not None else CopilotDraftService(app.state.public_data)
     app.state.ai_daily_limit = 10
 
     def record_activity(connection, task_id, kind, detail):

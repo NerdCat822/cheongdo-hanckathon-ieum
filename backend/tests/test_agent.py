@@ -101,6 +101,22 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(FakeClient.instance.stopped)
         self.assertFalse(os.path.exists(FakeClient.instance.options["base_directory"]))
 
+    async def test_vaccination_draft_uses_live_public_source_as_evidence(self):
+        class FakePublicData:
+            async def vaccines(self):
+                return {
+                    "source": {"title": "질병관리청", "url": "https://www.data.go.kr/data/15084296/openapi.do"},
+                    "retrieved_at": "2026-11-05T00:00:00+00:00",
+                    "items": [{"code": "01", "name": "결핵"}],
+                }
+
+        with patch.dict(os.environ, {"CARE_AI_ENABLED": "true", "COPILOT_GITHUB_TOKEN": "fake-oauth"}, clear=False):
+            with patch("backend.agent.CopilotClient", FakeClient):
+                result = await CopilotDraftService(FakePublicData()).generate("vaccination_checkup")
+        self.assertEqual(result["evidence"]["items"], [{"code": "01", "name": "결핵"}])
+        self.assertEqual(result["evidence"]["retrieved_at"], "2026-11-05T00:00:00+00:00")
+        self.assertIn("결핵", FakeClient.instance.tool_result.text_result_for_llm)
+
     async def test_disabled_and_rate_limited(self):
         with patch.dict(os.environ, {"CARE_AI_ENABLED": "false", "COPILOT_GITHUB_TOKEN": ""}):
             with self.assertRaises(AgentUnavailable):

@@ -100,7 +100,11 @@ function isDraftResponse(value: unknown): value is DraftResponse {
     && object(value.source) && isId(value.source.id) && typeof value.source.title === 'string'
     && typeof value.source.provider === 'string' && typeof value.source.url === 'string'
     && (value.source.checked_at === null || typeof value.source.checked_at === 'string')
-    && typeof value.source.summary === 'string';
+    && typeof value.source.summary === 'string'
+    && (value.evidence === null || (object(value.evidence) && object(value.evidence.source)
+      && typeof value.evidence.source.title === 'string' && typeof value.evidence.source.url === 'string'
+      && typeof value.evidence.retrieved_at === 'string' && Array.isArray(value.evidence.items)
+      && value.evidence.items.every((item: unknown) => hasStringFields(item, ['code', 'name']))));
 }
 
 function hasStringFields<K extends string>(value: unknown, fields: readonly K[]): value is Record<K, string> {

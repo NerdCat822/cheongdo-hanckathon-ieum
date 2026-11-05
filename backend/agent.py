@@ -14,6 +14,7 @@ from copilot.generated.session_events import PermissionRequestCustomTool
 from pydantic import ValidationError
 
 from backend.catalog import SOURCES
+from backend.public_data import PublicDataService
 from backend.schemas import DraftResult
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 INSTRUCTIONS = """당신은 가상 가족 돌봄 시연의 할 일 초안 작성자입니다.
 사용자가 선택한 가상 주제만 다루고 lookup_care_source 도구를 반드시 호출하세요.
 도구 결과의 공식 홈페이지는 일반 참고 링크이지 제도 내용의 검증이나 근거가 아닙니다.
+예방접종 목록이 있으면 조회 시각이 표시된 질병관리청의 공개 감염병 명칭만 참고할 수 있습니다.
 실시간 제도, 자격, 접종 대상, 의료 판단, 특정 기한, 연락처는 추측하지 마세요.
 개인정보를 요청하지 마세요. 기관에 확인할 행동만 제안하세요.
 한글로 1~3개의 초안을 만들고 JSON 객체만 반환하세요.
@@ -65,11 +67,12 @@ def parse_response(text):
 
 
 class CopilotDraftService:
-    def __init__(self):
+    def __init__(self, public_data=None):
         self.enabled = os.getenv("CARE_AI_ENABLED", "").lower() in {"1", "true"}
         self.token = os.getenv("COPILOT_GITHUB_TOKEN")
         self.use_login = os.getenv("CARE_COPILOT_USE_LOGIN", "").lower() in {"1", "true"}
         self.model = os.getenv("GITHUB_COPILOT_MODEL", "gpt-4.1")
+        self.public_data = public_data if public_data is not None else PublicDataService()
         self._running = False
         self._requests = deque()
 
@@ -97,12 +100,25 @@ class CopilotDraftService:
     async def _generate(self, category):
         source = next(item for item in SOURCES if item["id"] == category)
         called = False
+        evidence = None
 
-        @tool(name="lookup_care_source", description="선택된 가상 돌봄 분야의 승인된 공식 홈페이지 참고 정보를 조회합니다.")
-        def lookup_care_source() -> str:
-            nonlocal called
+        @tool(name="lookup_care_source", description="선택된 가상 분야의 공식 홈페이지와 이용 가능한 공개 감염병 목록을 조회합니다.")
+        async def lookup_care_source() -> str:
+            nonlocal called, evidence
+            if category == "vaccination_checkup":
+                data = await self.public_data.vaccines()
+                evidence = {
+                    "source": data["source"],
+                    "retrieved_at": data["retrieved_at"],
+                    "items": [
+                        {"code": item["code"][:10], "name": item["name"][:100]}
+                        for item in data["items"][:40] if item["name"]
+                    ],
+                }
+                if not evidence["items"]:
+                    raise AgentInvalidResponse()
             called = True
-            return json.dumps(source, ensure_ascii=False)
+            return json.dumps({"homepage": source, "public_data": evidence}, ensure_ascii=False)
 
         with tempfile.TemporaryDirectory(prefix="ieum-copilot-") as directory:
             client = await asyncio.to_thread(
@@ -153,4 +169,5 @@ class CopilotDraftService:
                 for item in parsed.drafts
             ],
             "source": source,
+            "evidence": evidence,
         }

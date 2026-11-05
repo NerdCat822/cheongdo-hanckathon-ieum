@@ -60,6 +60,7 @@ export interface Draft {
 export interface DraftResponse {
   drafts: Draft[];
   source: Source;
+  evidence: PublicResult<Vaccine> | null;
 }
 
 export interface PublicResult<T> {
