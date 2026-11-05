@@ -4,6 +4,7 @@ TRD: 기술 설계
 
 상태: 공개 가상 시연. Microsoft Agent Framework와 GitHub Copilot SDK를 사용해 실제 초안을 생성하고 사용자가 검토 후 저장한다. 실제 사용자 인증·권한·동의는 구현 전이며 Jira 대신 자체 업무 보드를 사용한다.
 배포: Azure Container Apps HTTPS 게이트웨이가 Azure VM의 Docker Compose 웹/API와 로컬 PostgreSQL로 연결된다. VM이 중지되면 서비스도 중지된다.
+공개 URL: https://ieum.mangostone-78c3018e.eastus.azurecontainerapps.io. 게이트웨이는 사용량이 없으면 축소될 수 있어 첫 접속이 느릴 수 있다.
 공공 API: 병원 검색·진료과목과 예방접종 목록·상세는 서버에서 공공데이터포털 인증키로 조회한다. 노인복지시설은 호출 조건을 확인하지 못해 미연결이다.
 기준: PRD.md의 범위. PRD·TRD·TDD가 충돌하면 구현 전에 정리한다.
 외부 모델 검토: 대기
@@ -93,7 +94,7 @@ GET /api/public/vaccines, /api/public/vaccines/{code}: 감염병 목록·상세
 
 외부 호출에는 시간 제한과 명시적 오류 처리를 둔다. 성공처럼 보이는 대체 결과를 만들지 않는다.
 출처가 없거나 확인일이 없는 데이터는 공식 안내로 노출하지 않는다.
-공개 AI 호출은 전체 사용자 합산 최근 24시간 10회로 제한하고 시도 횟수는 DB에 저장한다. 공공 API도 프로세스별 호출량을 제한한다. AI와 공공 API에는 요청 시간 제한을 둔다.
+공개 AI 호출은 실패한 시도를 포함해 전체 사용자 합산 최근 24시간 10회로 제한하고 시도 횟수는 DB에 저장한다. 공공 API도 프로세스별 호출량을 제한한다. AI와 공공 API에는 요청 시간 제한을 둔다.
 Copilot 추론과 도구 호출은 실제 계정으로 확인했다. 인증 정보는 컨테이너 런타임 환경으로 전달되며, 토큰 만료나 컨테이너 재생성 시 `CARE_AI_ENABLED`와 `COPILOT_GITHUB_TOKEN`을 다시 설정해야 한다. 실제 알림·공유·접수는 하지 않는다.
 백엔드 테스트는 프로젝트 루트에서 `.venv/bin/python -m unittest discover -s backend/tests -v`로 실행한다. 실제 사용자 권한·동의 및 외부 연동 테스트는 구현 후 수행한다.
 
