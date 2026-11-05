@@ -7,6 +7,7 @@ from sqlalchemy import (
     CheckConstraint,
     Column,
     Date,
+    DateTime,
     MetaData,
     String,
     Table,
@@ -58,6 +59,16 @@ seed_markers = Table(
     "care_demo_seed_markers",
     metadata,
     Column("name", String(100), primary_key=True),
+)
+
+task_activity = Table(
+    "care_demo_task_activity",
+    metadata,
+    Column("event_id", String(40), primary_key=True),
+    Column("task_id", String(100), nullable=False, index=True),
+    Column("kind", String(32), nullable=False),
+    Column("detail", String(200), nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
 SEED_MARKER = "chengdo_table_v1"

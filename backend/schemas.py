@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 from backend.catalog import MEMBER_IDS, SOURCE_IDS
 
@@ -96,4 +96,15 @@ class AssignmentResponse(InputModel):
 
 
 class DraftRequest(InputModel):
-    prompt: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)]
+    category: Category
+    acknowledged: Literal[True]
+
+
+class DraftItem(InputModel):
+    title: Title
+    description: Description
+    uncertainty: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
+
+
+class DraftResult(InputModel):
+    drafts: Annotated[list[DraftItem], Field(min_length=1, max_length=3)]

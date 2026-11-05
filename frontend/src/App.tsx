@@ -3,11 +3,11 @@ import type { FormEvent, ReactNode } from 'react';
 import {
   AlertCircle, ArrowRight, ArrowUpRight,
   Check, CheckCircle2, ChevronDown, ClipboardList, ExternalLink,
-  Info, ListFilter, LoaderCircle, LockKeyhole, Pencil, Plus, RefreshCw, ShieldCheck,
+  Info, ListFilter, LoaderCircle, Pencil, Plus, RefreshCw, ShieldCheck,
   Sparkles, X,
 } from 'lucide-react';
 import { api } from './api';
-import type { Category, Demo, Id, Integrations, Member, Source, Task, TaskInput, TaskStatus } from './types';
+import type { Activity, Category, Demo, Draft, DraftResponse, Hospital, Id, Integrations, Member, PublicResult, Source, Specialty, Task, TaskInput, TaskStatus, Vaccine, VaccineDetail } from './types';
 
 const categories: Record<Category, string> = {
   benefit: '복지 혜택 · 제도',
@@ -80,7 +80,8 @@ function App() {
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const [taskErrors, setTaskErrors] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState('');
-  const [editor, setEditor] = useState<{ task: Task | null; category?: Category } | null>(null);
+  const [editor, setEditor] = useState<{ task: Task | null; category?: Category; draft?: Draft; onDraftSaved?: () => void } | null>(null);
+  const [boardView, setBoardView] = useState(false);
 
   const loadDemo = useCallback(async () => {
     setLoading(true);
@@ -103,7 +104,7 @@ function App() {
     setIntegrationError('');
     try {
       const data = await api.integrations();
-      if (!data?.agent || !data?.jira) throw new Error('연동 상태 응답 형식이 올바르지 않습니다.');
+      if (!data?.agent) throw new Error('연동 상태 응답 형식이 올바르지 않습니다.');
       setIntegrations(data);
     } catch (error) {
       setIntegrations(null);
@@ -163,6 +164,7 @@ function App() {
   };
 
   const anyBusy = Object.values(busy).some(Boolean);
+  const renderTask = (task: Task, index: number) => <TaskCard key={task.task_id} index={index + 1} task={task} members={demo!.members} sources={demo!.sources} busy={Boolean(busy[String(task.task_id)])} error={taskErrors[String(task.task_id)]} onEdit={() => setEditor({ task })} onChangeStatus={(next) => void runTask(task, () => api.updateTask(task.task_id, { status: next }), '시연 할 일의 상태를 변경했습니다.')} onRequest={(member) => void runTask(task, () => api.requestAssignment(task.task_id, member), '시연 담당 요청을 기록했습니다. 실제 알림은 보내지지 않습니다.')} onResponse={(member, decision) => void runTask(task, () => api.respondAssignment(task.task_id, member, decision), '시연 응답을 기록했습니다.')} />;
 
   return (
     <>
@@ -192,6 +194,8 @@ function App() {
           <p><strong>공개 시연 · 가상 데이터만 사용합니다.</strong> 실명, 연락처, 주소, 건강·소득 정보 등 실제 개인정보는 입력하지 마세요. 복지 자격이나 의료 정보를 판단하지 않습니다.</p>
         </aside>
 
+        <DraftPanel integration={integrations?.agent} loading={integrationLoading} error={integrationError} onReview={(draft, onDraftSaved) => setEditor({ task: null, draft, onDraftSaved })} />
+
         <section className="tasks-section" id="tasks" aria-labelledby="tasks-title">
           <div className="section-heading">
             <div><h2 id="tasks-title">지금 챙길 일</h2><p className="section-subtitle">담당자와 진행 상태를 한눈에 확인해요.</p></div>
@@ -211,11 +215,20 @@ function App() {
             {(quickFilter !== 'all' || category !== 'all' || status !== 'all') && <button className="text-button" type="button" onClick={() => { setQuickFilter('all'); setCategory('all'); setStatus('all'); }}>필터 초기화</button>}
             <button className="refresh-button" type="button" onClick={() => void loadDemo()} disabled={loading || anyBusy} aria-label="할 일 목록 새로고침"><RefreshCw size={19} aria-hidden="true" /></button>
           </div>
+          <div className="view-switch" aria-label="업무 보기 방식">
+            <button type="button" aria-pressed={!boardView} onClick={() => setBoardView(false)}>목록 보기</button>
+            <button type="button" aria-pressed={boardView} onClick={() => setBoardView(true)}>업무 보드</button>
+          </div>
           <div className="live-message" aria-live="polite">{notice}</div>
           {loadError && <ErrorMessage>{loadError} {demo && '이전에 불러온 데이터가 남아 있을 수 있습니다.'} <button type="button" className="text-button" onClick={() => void loadDemo()}>다시 불러오기</button></ErrorMessage>}
           {loading && <div className="empty-state" role="status"><LoaderCircle className="spinner" size={25} aria-hidden="true" /><p>시연 데이터를 불러오고 있어요.</p></div>}
           {!loading && demo && filteredTasks.length === 0 && <div className="empty-state"><ClipboardList size={30} aria-hidden="true" /><h3>보여드릴 할 일이 없어요</h3><p>{demo.tasks.length ? '다른 필터를 선택하거나 필터를 초기화해 보세요.' : '시연용 할 일을 하나 추가해 보세요.'}</p></div>}
-          {!loading && demo && filteredTasks.length > 0 && <div className="task-list"><div className="task-header" aria-hidden="true"><span>할 일</span><span>담당자</span><span>진행 상태</span></div>{filteredTasks.map((task, index) => <TaskCard key={task.task_id} index={index + 1} task={task} members={demo.members} sources={demo.sources} busy={Boolean(busy[String(task.task_id)])} error={taskErrors[String(task.task_id)]} onEdit={() => setEditor({ task })} onChangeStatus={(next) => void runTask(task, () => api.updateTask(task.task_id, { status: next }), '시연 할 일의 상태를 변경했습니다.')} onRequest={(member) => void runTask(task, () => api.requestAssignment(task.task_id, member), '시연 담당 요청을 기록했습니다. 실제 알림은 보내지지 않습니다.')} onResponse={(member, decision) => void runTask(task, () => api.respondAssignment(task.task_id, member, decision), '시연 응답을 기록했습니다.')} />)}</div>}
+          {!loading && demo && filteredTasks.length > 0 && (boardView
+            ? <div className="board" aria-label="진행 상태별 업무 보드">{statuses.map((stage) => {
+              const stageTasks = filteredTasks.filter((task) => task.status === stage);
+              return <section className="board-column" key={stage} aria-label={`${stage} ${stageTasks.length}개`}><h3>{stage} <span>{stageTasks.length}</span></h3>{stageTasks.length ? stageTasks.map(renderTask) : <p className="board-empty">할 일이 없어요</p>}</section>;
+            })}</div>
+            : <div className="task-list"><div className="task-header" aria-hidden="true"><span>할 일</span><span>담당자</span><span>진행 상태</span></div>{filteredTasks.map(renderTask)}</div>)}
         </section>
 
         <section className="categories-section" aria-labelledby="categories-title">
@@ -243,22 +256,158 @@ function App() {
           {demo && demo.sources.length > 0 && <div className="source-grid">{demo.sources.map((source) => <SourceCard key={source.id} source={source} />)}</div>}
         </section>
 
-        <aside className="integrations-card" aria-label="연동 상태">
-          <div className="side-heading"><h2>연동 상태</h2><LockKeyhole size={20} aria-hidden="true" /></div>
-          {integrationLoading && <p className="section-subtitle" role="status">연동 상태를 확인하는 중이에요.</p>}
-          {integrationError && <><ErrorMessage>{integrationError}</ErrorMessage><button className="text-button" type="button" onClick={() => void loadIntegrations()}>연동 상태 다시 확인</button></>}
-          {!integrationLoading && integrations && <div className="integration-grid">
-            <Integration icon={<Sparkles size={20} />} title="AI 초안" reason={integrations.agent.reason} available={integrations.agent.available} description="출처를 바탕으로 제안하는 초안 기능" />
-            <Integration icon={<ClipboardList size={20} />} title="Jira 문의 추적" reason={integrations.jira.reason} available={integrations.jira.available} description="시연용 문의 티켓 기능" />
-          </div>}
-          <p className="integration-footnote">AI 초안과 Jira 티켓 생성은 현재 사용할 수 없습니다. 실제 접수나 기관 업무 상태가 아닙니다.</p>
-        </aside>
+        <PublicDataPanel />
+
+        {integrationError && <button className="text-button" type="button" onClick={() => void loadIntegrations()}>AI 연동 상태 다시 확인</button>}
         <div className="privacy-note"><ShieldCheck size={20} aria-hidden="true" /><p><strong>시연 범위를 기억해 주세요.</strong> 실제 가족 공유를 위한 동의·역할 권한 확인은 제공되지 않으며, 담당 요청이나 응답은 실제 가족에게 전달되지 않습니다.</p></div>
       </main>
       <footer className="footer"><div className="wrap footer-inner"><strong>이음</strong><p>합성 데이터 기반 공개 시연 · 실제 서비스 아님</p></div></footer>
-      {editor && demo && <TaskEditor task={editor.task} initialCategory={editor.category} sources={demo.sources} onClose={() => setEditor(null)} onSaved={(task, created) => { replaceTask(task, created); setNotice(created ? '시연 할 일을 추가했습니다.' : '시연 할 일을 수정했습니다.'); setEditor(null); }} />}
+      {editor && demo && <TaskEditor task={editor.task} draft={editor.draft} initialCategory={editor.category} sources={demo.sources} onClose={() => setEditor(null)} onSaved={(task, created) => { replaceTask(task, created); editor.onDraftSaved?.(); setNotice(created ? '시연 할 일을 추가했습니다.' : '시연 할 일을 수정했습니다.'); setEditor(null); }} />}
     </>
   );
+}
+
+function PublicAttribution({ source, retrievedAt }: { source: { title: string; url: string }; retrievedAt: string }) {
+  const url = safeSourceUrl({ id: 'public', title: source.title, provider: source.title, url: source.url, checked_at: retrievedAt, summary: '' });
+  return <p className="public-attribution">출처: {url ? <a href={url} target="_blank" rel="noopener noreferrer">{source.title} ↗</a> : source.title} · 조회: {new Date(retrievedAt).toLocaleString('ko-KR')}</p>;
+}
+
+function PublicDataPanel() {
+  const [name, setName] = useState('');
+  const [hospitals, setHospitals] = useState<PublicResult<Hospital> | null>(null);
+  const [specialties, setSpecialties] = useState<PublicResult<Specialty> | null>(null);
+  const [selectedHospital, setSelectedHospital] = useState('');
+  const [vaccines, setVaccines] = useState<PublicResult<Vaccine> | null>(null);
+  const [vaccineDetail, setVaccineDetail] = useState<PublicResult<VaccineDetail> | null>(null);
+  const [busy, setBusy] = useState('');
+  const [error, setError] = useState('');
+
+  const search = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!name.trim() || busy) return;
+    setBusy('hospitals'); setError(''); setHospitals(null); setSpecialties(null); setSelectedHospital('');
+    try { setHospitals(await api.hospitals(name.trim())); }
+    catch (err) { setError(err instanceof Error ? err.message : '병원 정보를 조회하지 못했습니다.'); }
+    finally { setBusy(''); }
+  };
+  const showSpecialties = async (hospital: Hospital) => {
+    setBusy('specialties'); setError(''); setSpecialties(null); setSelectedHospital(hospital.name);
+    try { setSpecialties(await api.specialties(hospital.id)); }
+    catch (err) { setError(err instanceof Error ? err.message : '진료과목을 조회하지 못했습니다.'); }
+    finally { setBusy(''); }
+  };
+  const loadVaccines = async () => {
+    setBusy('vaccines'); setError(''); setVaccines(null); setVaccineDetail(null);
+    try { setVaccines(await api.vaccines()); }
+    catch (err) { setError(err instanceof Error ? err.message : '예방접종 정보를 조회하지 못했습니다.'); }
+    finally { setBusy(''); }
+  };
+  const showVaccine = async (code: string) => {
+    setBusy('vaccine-detail'); setError(''); setVaccineDetail(null);
+    try { setVaccineDetail(await api.vaccineDetail(code)); }
+    catch (err) { setError(err instanceof Error ? err.message : '상세 정보를 조회하지 못했습니다.'); }
+    finally { setBusy(''); }
+  };
+
+  return <section className="public-section" aria-labelledby="public-title">
+    <div className="section-heading"><div><h2 id="public-title">공공정보 찾아보기</h2><p className="section-subtitle">공식 API에서 직접 조회한 정보입니다. 실제 이용 가능 여부는 기관에 확인하세요.</p></div></div>
+    <p className="public-warning">병원 이름만 검색하세요. 실명, 주소, 증상과 같은 개인정보는 입력하지 마세요. 검색한 병원 이름은 건강보험심사평가원에 전송됩니다.</p>
+    {error && <ErrorMessage>{error}</ErrorMessage>}
+    <div className="public-grid">
+      <article className="public-card">
+        <h3>병원과 진료과목</h3>
+        <form className="public-search" onSubmit={(event) => void search(event)}>
+          <label className="field"><span>병원 이름</span><input value={name} onChange={(event) => setName(event.target.value)} maxLength={100} placeholder="예: 청도" /></label>
+          <button type="submit" className="button button-secondary" disabled={!name.trim() || Boolean(busy)}>{busy === 'hospitals' ? '조회 중' : '병원 검색'}</button>
+        </form>
+        {hospitals && <><PublicAttribution source={hospitals.source} retrievedAt={hospitals.retrieved_at} /><p>최대 10건을 표시합니다.</p>{hospitals.items.length === 0 && <p>검색 결과가 없습니다.</p>}
+          <ul className="public-list">{hospitals.items.map((hospital, index) => <li key={`${hospital.id}-${index}`}><strong>{hospital.name || '이름 미제공'}</strong><span>{hospital.type} · {hospital.address || '주소 미제공'}</span><span>{hospital.phone || '전화번호 미제공'}</span><button type="button" className="text-button" disabled={!hospital.id || Boolean(busy)} onClick={() => void showSpecialties(hospital)}>진료과목 보기</button></li>)}</ul></>}
+        {busy === 'specialties' && <p role="status">진료과목을 조회 중입니다.</p>}
+        {specialties && <div className="public-detail"><strong>{selectedHospital} 진료과목</strong><PublicAttribution source={specialties.source} retrievedAt={specialties.retrieved_at} />{specialties.items.length ? <ul>{specialties.items.map((item, index) => <li key={`${item.name}-${index}`}>{item.name || '과목 미제공'}{item.specialists ? ` · 전문의 ${item.specialists}명` : ''}</li>)}</ul> : <p>제공된 진료과목이 없습니다.</p>}</div>}
+      </article>
+      <article className="public-card">
+        <h3>예방접종 대상 감염병</h3>
+        <p>일반 정보이며 개인별 접종 대상이나 의료 판단이 아닙니다.</p>
+        <button type="button" className="button button-secondary" disabled={Boolean(busy)} onClick={() => void loadVaccines()}>{busy === 'vaccines' ? '조회 중' : '감염병 목록 조회'}</button>
+        {vaccines && <><PublicAttribution source={vaccines.source} retrievedAt={vaccines.retrieved_at} />{vaccines.items.length === 0 && <p>조회 결과가 없습니다.</p>}
+          <ul className="public-list">{vaccines.items.map((item, index) => <li key={`${item.code}-${index}`}><button type="button" className="text-button" disabled={!item.code || Boolean(busy)} onClick={() => void showVaccine(item.code)}>{item.name || '명칭 미제공'}</button></li>)}</ul></>}
+        {busy === 'vaccine-detail' && <p role="status">상세 정보를 조회 중입니다.</p>}
+        {vaccineDetail && <div className="public-detail"><PublicAttribution source={vaccineDetail.source} retrievedAt={vaccineDetail.retrieved_at} />{vaccineDetail.items.length ? vaccineDetail.items.map((item, index) => <div key={index}><strong>{item.title}</strong><p className="public-message">{item.message}</p></div>) : <p>제공된 상세 정보가 없습니다.</p>}</div>}
+      </article>
+      <article className="public-card">
+        <h3>노인복지시설</h3>
+        <p>국토교통부 공간정보 API의 상세 호출 조건을 확인할 수 없어 아직 연결하지 않았습니다.</p>
+        <a href="https://www.data.go.kr/data/15056929/openapi.do" target="_blank" rel="noopener noreferrer">공식 안내 보기 ↗</a>
+      </article>
+    </div>
+  </section>;
+}
+
+function DraftPanel({ integration, loading, error, onReview }: { integration?: Integrations['agent']; loading: boolean; error: string; onReview: (draft: Draft, onSaved: () => void) => void }) {
+  const [category, setCategory] = useState<Category>('benefit');
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [result, setResult] = useState<DraftResponse | null>(null);
+  const [requestError, setRequestError] = useState('');
+
+  const generate = async () => {
+    setGenerating(true);
+    setRequestError('');
+    setResult(null);
+    try {
+      setResult(await api.draft(category));
+    } catch (err) {
+      setRequestError(err instanceof Error ? err.message : '초안을 만들지 못했습니다.');
+    } finally {
+      setGenerating(false);
+    }
+  };
+  const url = result && safeSourceUrl(result.source);
+  return <section className="draft-panel" aria-labelledby="draft-title">
+    <div className="section-heading"><div><h2 id="draft-title"><Sparkles size={22} aria-hidden="true" /> AI로 확인할 일 찾기</h2><p className="section-subtitle">Microsoft Agent Framework와 GitHub Copilot으로 가상 업무 초안을 제안합니다.</p></div></div>
+    <p>선택한 가상 분야만 Copilot에 전송합니다. 실제 이름, 건강정보 등은 입력하지 않습니다. 초안은 확인 후 직접 저장해야 합니다.</p>
+    {loading && <p role="status">AI 연동 상태를 확인 중입니다.</p>}
+    {error && <ErrorMessage>{error}</ErrorMessage>}
+    {!loading && integration && !integration.available && <p className="draft-disabled">현재 사용 불가: {integration.reason}</p>}
+    <div className="draft-controls">
+      <label className="field"><span>가상 분야</span><select value={category} disabled={generating} onChange={(event) => setCategory(event.target.value as Category)}>{Object.entries(categories).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      <label className="draft-consent"><input type="checkbox" checked={acknowledged} disabled={generating} onChange={(event) => setAcknowledged(event.target.checked)} /> 가상 분야를 Copilot에 보내 초안을 만드는 데 동의합니다.</label>
+      <button className="button button-primary" type="button" disabled={!integration?.available || !acknowledged || generating} onClick={() => void generate()}>{generating ? <><LoaderCircle size={18} className="spinner" aria-hidden="true" /> 초안 만드는 중</> : <><Sparkles size={18} aria-hidden="true" /> AI 초안 만들기</>}</button>
+    </div>
+    {requestError && <ErrorMessage>{requestError}</ErrorMessage>}
+    {result && <div className="draft-results" aria-live="polite">
+      <p><strong>참고 홈페이지:</strong> {url ? <a href={url} target="_blank" rel="noopener noreferrer">{result.source.provider} · {result.source.title} ↗</a> : '출처 확인 필요'} · 확인일 {result.source.checked_at ?? '미확인'}</p>
+      <p>{result.source.summary} 일반 홈페이지는 구체적인 제도 내용의 근거가 아닙니다. 실제 내용은 기관에 확인하세요.</p>
+      {result.drafts.length === 0 && <p>모든 초안을 검토했습니다.</p>}
+      {result.drafts.map((draft, index) => <article className="draft-item" key={`${index}-${draft.title}`}><div><h3>{draft.title}</h3><p>{draft.description}</p><p><strong>확인 필요:</strong> {draft.uncertainty}</p></div><div className="draft-actions"><button type="button" className="button button-secondary" onClick={() => onReview(draft, () => setResult((current) => current && ({ ...current, drafts: current.drafts.filter((_, itemIndex) => itemIndex !== index) })))}>검토·수정</button><button type="button" className="text-button" onClick={() => setResult((current) => current && ({ ...current, drafts: current.drafts.filter((_, itemIndex) => itemIndex !== index) }))}>거절</button></div></article>)}
+    </div>}
+  </section>;
+}
+
+function ActivityHistory({ task }: { task: Task }) {
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<Activity[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [retry, setRetry] = useState(0);
+
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    setLoading(true);
+    setError('');
+    api.activity(task.task_id).then((value) => { if (active) setItems(value); })
+      .catch((err: unknown) => { if (active) setError(err instanceof Error ? err.message : '이력을 불러오지 못했습니다.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [open, task, retry]);
+
+  return <details className="activity-history" onToggle={(event) => setOpen(event.currentTarget.open)}>
+    <summary>변경 이력 보기</summary>
+    {loading && <p role="status">이력을 불러오는 중입니다.</p>}
+    {error && <><ErrorMessage>{error}</ErrorMessage><button className="text-button" type="button" onClick={() => setRetry((value) => value + 1)}>다시 불러오기</button></>}
+    {!loading && !error && (items.length ? <ol>{items.map((item) => <li key={item.event_id}><span>{item.detail}</span><time dateTime={item.created_at}>{new Date(item.created_at).toLocaleString('ko-KR')}</time></li>)}</ol> : <p>기록된 이력이 없습니다. 기존 시연 데이터는 변경 시점부터 기록됩니다.</p>)}
+  </details>;
 }
 
 function TaskCard({ index, task, members, sources, busy, error, onEdit, onChangeStatus, onRequest, onResponse }: { index: number; task: Task; members: Member[]; sources: Source[]; busy: boolean; error?: string; onEdit: () => void; onChangeStatus: (status: TaskStatus) => void; onRequest: (member: Id) => void; onResponse: (member: Id, decision: 'accept' | 'reject' | 'adjust') => void }) {
@@ -292,6 +441,7 @@ function TaskCard({ index, task, members, sources, busy, error, onEdit, onChange
               <div className="request-controls"><label><span className="sr-only">{task.title}의 가상 가족 선택</span><select value={selectedMember} disabled={busy || members.length === 0} onChange={(event) => setSelectedMember(event.target.value)}><option value="">가상 가족 선택</option>{members.map((item) => <option key={item.id} value={String(item.id)}>{item.name}</option>)}</select></label><button type="button" disabled={busy || !member} onClick={() => { if (member) onRequest(member.id); }}>시연 요청 <ArrowRight size={16} aria-hidden="true" /></button></div>
             </div>
           ) : <p className="closed-task-note">완료 또는 해당 없음 상태에서는 담당을 요청할 수 없어요.</p>}
+          <ActivityHistory task={task} />
         </div>
       </details>
       {error && <div className="task-error"><ErrorMessage>{error}</ErrorMessage></div>}
@@ -304,17 +454,13 @@ function SourceCard({ source }: { source: Source }) {
   return <article className="source-card"><div className="source-top"><span className="source-icon"><ClipboardList size={18} aria-hidden="true" /></span><span className="source-sample">참고 예시</span></div><h3>{source.title}</h3><p>{source.summary}</p><div className="source-details"><span>{source.provider || '제공기관 미확인'}</span><span>확인일 {source.checked_at || '미확인'}</span></div>{url ? <a href={url} target="_blank" rel="noopener noreferrer">기관 원문 보기 <ArrowUpRight size={15} aria-hidden="true" /><span className="sr-only"> (새 창)</span></a> : <span className="source-unavailable">출처 또는 확인일을 확인할 수 없어요</span>}</article>;
 }
 
-function Integration({ icon, title, reason, available, description }: { icon: ReactNode; title: string; reason: string; available: boolean; description: string }) {
-  return <div className="integration"><span className="integration-icon">{icon}</span><div className="integration-copy"><div><strong>{title}</strong><span className="disabled-badge">사용 불가</span></div><p>{description}</p><p className="integration-reason">{available ? '화면에서 지원하지 않습니다. 연동 상태를 확인해 주세요.' : reason || '연동이 준비되지 않았습니다.'}</p></div></div>;
-}
-
-function TaskEditor({ task, initialCategory, sources, onClose, onSaved }: { task: Task | null; initialCategory?: Category; sources: Source[]; onClose: () => void; onSaved: (task: Task, created: boolean) => void }) {
+function TaskEditor({ task, draft, initialCategory, sources, onClose, onSaved }: { task: Task | null; draft?: Draft; initialCategory?: Category; sources: Source[]; onClose: () => void; onSaved: (task: Task, created: boolean) => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
-  const [title, setTitle] = useState(task?.title ?? '');
-  const [description, setDescription] = useState(task?.description ?? '');
-  const [category, setCategory] = useState<Category>(task?.category ?? initialCategory ?? 'benefit');
+  const [title, setTitle] = useState(task?.title ?? draft?.title ?? '');
+  const [description, setDescription] = useState(task?.description ?? draft?.description ?? '');
+  const [category, setCategory] = useState<Category>(task?.category ?? draft?.category ?? initialCategory ?? 'benefit');
   const [dueDate, setDueDate] = useState(task?.due_date ?? '');
-  const [sourceId, setSourceId] = useState(task?.source_id != null ? String(task.source_id) : '');
+  const [sourceId, setSourceId] = useState(task?.source_id != null ? String(task.source_id) : draft ? String(draft.source_id) : '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -337,8 +483,9 @@ function TaskEditor({ task, initialCategory, sources, onClose, onSaved }: { task
   };
 
   return <dialog className="editor-dialog" ref={dialog} onClose={onClose} onCancel={(event) => { if (saving) event.preventDefault(); }} aria-labelledby="editor-title">
-    <div className="dialog-heading"><h2 id="editor-title">{task ? '시연 할 일 수정' : '새 할 일 추가'}</h2><button className="icon-button" type="button" disabled={saving} onClick={() => dialog.current?.close()} aria-label="닫기"><X size={20} aria-hidden="true" /></button></div>
+    <div className="dialog-heading"><h2 id="editor-title">{task ? '시연 할 일 수정' : draft ? 'AI 초안 검토 및 수정' : '새 할 일 추가'}</h2><button className="icon-button" type="button" disabled={saving} onClick={() => dialog.current?.close()} aria-label="닫기"><X size={20} aria-hidden="true" /></button></div>
     <p className="editor-intro">가상의 확인 업무만 적어 주세요. 실제 예약이나 신청은 되지 않습니다.</p>
+    {draft && <p className="editor-intro"><strong>AI 초안은 아직 저장되지 않았습니다.</strong> 내용을 확인·수정한 뒤 저장해 주세요. {draft.uncertainty}</p>}
     <div className="editor-warning"><ShieldCheck size={17} aria-hidden="true" /> 실명·연락처·건강·소득 등 실제 개인정보는 입력하지 마세요.</div>
     <form onSubmit={(event) => void submit(event)}>
       <label className="field"><span>할 일 제목 <b>*</b></span><input autoFocus required maxLength={200} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="예: 지역 프로그램 안내 확인하기" /></label>

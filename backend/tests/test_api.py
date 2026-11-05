@@ -214,7 +214,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(self.client.post(f"/api/tasks/{task_id}/assignment-response",
                                           json={"member_id": "member-1", "decision": "maybe"}).status_code, 422)
 
-    def test_integrations_do_not_generate_store_or_send_prompt(self):
+    def test_disabled_integrations_do_not_generate_store_or_send_prompt(self):
         marker = "가상-프롬프트-출력-금지"
         captured = []
 
@@ -227,21 +227,64 @@ class ApiTests(unittest.TestCase):
         self.addCleanup(logging.getLogger().removeHandler, handler)
         with patch("socket.socket.connect", side_effect=AssertionError("unexpected network")):
             integrations = self.client.get("/api/integrations").json()
-            self.assertEqual(set(integrations), {"agent", "jira"})
+            self.assertEqual(set(integrations), {"agent"})
             for value in integrations.values():
                 self.assertEqual(set(value), {"available", "reason"})
                 self.assertIs(value["available"], False)
                 self.assertTrue(value["reason"])
             before = self.client.get("/api/demo").json()["tasks"]
-            response = self.client.post("/api/agent/draft", json={"prompt": marker})
+            response = self.client.post("/api/agent/draft", json={"category": "benefit", "acknowledged": True})
             self.assertEqual(response.status_code, 503)
             self.assertNotIn(marker, response.text)
-            invalid = self.client.post("/api/agent/draft", json={"prompt": marker, marker: marker})
+            invalid = self.client.post("/api/agent/draft", json={"category": "benefit", "acknowledged": True, marker: marker})
             self.assertEqual(invalid.status_code, 422)
             self.assertNotIn(marker, invalid.text)
             self.assertEqual(before, self.client.get("/api/demo").json()["tasks"])
             self.assertEqual(self.client.post("/api/jira/tickets", json={}).status_code, 404)
         self.assertNotIn(marker, "\n".join(captured))
+
+    def test_board_activity_tracks_real_transitions(self):
+        task_id = self.create_task()
+        base = f"/api/tasks/{task_id}"
+        self.client.patch(base, json={"title": "가상 수정"})
+        self.client.post(base + "/assignment-request", json={"assignee_id": "member-1"})
+        self.client.post(base + "/assignment-request", json={"assignee_id": "member-1"})
+        self.client.post(base + "/assignment-response", json={"member_id": "member-1", "decision": "accept"})
+        self.client.patch(base, json={"status": "완료"})
+        result = self.client.get(base + "/activity")
+        self.assertEqual(result.status_code, 200)
+        events = result.json()
+        self.assertEqual([event["kind"] for event in events], ["status", "response", "requested", "edited", "created"])
+        self.assertTrue(all(event["task_id"] == task_id and event["created_at"] for event in events))
+        self.assertEqual(self.client.get("/api/tasks/unknown/activity").status_code, 404)
+
+    def test_draft_requires_explicit_consent_and_does_not_save_until_review(self):
+        class FakeDraftService:
+            available = True
+
+            async def generate(self, category):
+                return {"drafts": [{
+                    "title": "가상 확인", "description": "공식 기관에 확인",
+                    "uncertainty": "조건은 공식 기관에 확인", "category": category, "source_id": category,
+                }], "source": {"id": category}}
+
+        with TestClient(create_app(Database(self.engine), FakeDraftService())) as client:
+            before = len(client.get("/api/demo").json()["tasks"])
+            for payload in (
+                {"category": "benefit"},
+                {"category": "benefit", "acknowledged": False},
+                {"category": "invalid", "acknowledged": True},
+                {"category": "benefit", "acknowledged": True, "prompt": "개인정보"},
+            ):
+                self.assertEqual(client.post("/api/agent/draft", json=payload).status_code, 422)
+            response = client.post("/api/agent/draft", json={"category": "benefit", "acknowledged": True})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(len(client.get("/api/demo").json()["tasks"]), before)
+            draft = response.json()["drafts"][0]
+            approved = {key: draft[key] for key in ("title", "description", "category", "source_id")}
+            approved["title"] = "사용자가 수정한 확인 업무"
+            self.assertEqual(client.post("/api/tasks", json=approved).status_code, 201)
+            self.assertEqual(len(client.get("/api/demo").json()["tasks"]), before + 1)
 
     def test_failed_initialization_is_not_marked_and_can_recover(self):
         with self.engine.begin() as connection:

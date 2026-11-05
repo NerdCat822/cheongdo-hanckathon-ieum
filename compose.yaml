@@ -23,6 +23,11 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      CARE_AI_ENABLED: ${CARE_AI_ENABLED:-false}
+      COPILOT_GITHUB_TOKEN: ${COPILOT_GITHUB_TOKEN:-}
+      GITHUB_COPILOT_MODEL: ${GITHUB_COPILOT_MODEL:-gpt-4.1}
+      DATA_GO_KR_SERVICE_KEY: ${DATA_GO_KR_SERVICE_KEY:-}
+      PUBLIC_DECODING_KEY: ${PUBLIC_DECODING_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy

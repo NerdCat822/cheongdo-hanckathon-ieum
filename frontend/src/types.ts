@@ -39,8 +39,46 @@ export interface Demo {
 
 export interface Integrations {
   agent: { available: boolean; reason: string };
-  jira: { available: boolean; reason: string };
 }
+
+export interface Activity {
+  event_id: string;
+  task_id: string;
+  kind: string;
+  detail: string;
+  created_at: string;
+}
+
+export interface Draft {
+  title: string;
+  description: string;
+  uncertainty: string;
+  category: Category;
+  source_id: Id;
+}
+
+export interface DraftResponse {
+  drafts: Draft[];
+  source: Source;
+}
+
+export interface PublicResult<T> {
+  source: { title: string; url: string };
+  retrieved_at: string;
+  items: T[];
+}
+
+export interface Hospital {
+  id: string;
+  name: string;
+  address: string;
+  phone: string;
+  type: string;
+}
+
+export interface Specialty { name: string; specialists: string }
+export interface Vaccine { code: string; name: string }
+export interface VaccineDetail { title: string; message: string }
 
 export interface TaskInput {
   title: string;

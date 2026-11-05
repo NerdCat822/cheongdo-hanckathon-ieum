@@ -3,6 +3,8 @@
 !backend/
 !backend/__init__.py
 !backend/app.py
+!backend/agent.py
 !backend/catalog.py
 !backend/database.py
+!backend/public_data.py
 !backend/schemas.py

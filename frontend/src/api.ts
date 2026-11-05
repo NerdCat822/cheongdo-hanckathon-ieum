@@ -1,4 +1,4 @@
-import type { Demo, Id, Integrations, Task, TaskInput, TaskStatus } from './types';
+import type { Activity, Category, Demo, DraftResponse, Hospital, Id, Integrations, PublicResult, Specialty, Task, TaskInput, TaskStatus, Vaccine, VaccineDetail } from './types';
 
 export class ApiError extends Error {
   constructor(message: string) {
@@ -7,14 +7,18 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+async function request<T>(path: string, options?: RequestInit, timeout = 15000): Promise<T> {
   let response: Response;
   try {
     response = await fetch(path, {
       ...options,
+      signal: options?.signal ?? AbortSignal.timeout(timeout),
       headers: { 'Content-Type': 'application/json', ...options?.headers },
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      throw new ApiError('요청 시간이 초과되었습니다.');
+    }
     throw new ApiError('서버에 연결하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.');
   }
   if (!response.ok) {
@@ -23,6 +27,8 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       404: '요청한 시연 데이터를 찾을 수 없습니다.',
       409: '현재 상태에서는 처리할 수 없습니다. 담당 요청과 할 일 상태를 확인해 주세요.',
       422: '입력 내용이 올바르지 않습니다. 필수 항목과 형식을 확인해 주세요.',
+      429: 'AI 요청이 많습니다. 잠시 후 다시 시도해 주세요.',
+      502: 'AI 초안이나 출처 확인에 실패했습니다. 다시 시도해 주세요.',
       503: '서버 또는 시연 연동을 현재 사용할 수 없습니다.',
     };
     throw new ApiError(`${detail[response.status] ?? '요청을 처리하지 못했습니다.'} (오류 ${response.status})`);
@@ -76,7 +82,42 @@ function isDemo(value: unknown): value is Demo {
 function isIntegrations(value: unknown): value is Integrations {
   const isIntegration = (item: unknown) =>
     object(item) && typeof item.available === 'boolean' && typeof item.reason === 'string';
-  return object(value) && isIntegration(value.agent) && isIntegration(value.jira);
+  return object(value) && isIntegration(value.agent);
+}
+
+function isActivity(value: unknown): value is Activity[] {
+  return Array.isArray(value) && value.every((item: unknown) =>
+    object(item) && typeof item.event_id === 'string' && typeof item.task_id === 'string'
+    && typeof item.kind === 'string' && typeof item.detail === 'string' && typeof item.created_at === 'string');
+}
+
+function isDraftResponse(value: unknown): value is DraftResponse {
+  return object(value) && Array.isArray(value.drafts) && value.drafts.length > 0 && value.drafts.length <= 3
+    && value.drafts.every((item: unknown) => object(item) && typeof item.title === 'string'
+      && typeof item.description === 'string' && typeof item.uncertainty === 'string'
+      && ['benefit', 'vaccination_checkup', 'regular_visit'].includes(String(item.category))
+      && isId(item.source_id))
+    && object(value.source) && isId(value.source.id) && typeof value.source.title === 'string'
+    && typeof value.source.provider === 'string' && typeof value.source.url === 'string'
+    && (value.source.checked_at === null || typeof value.source.checked_at === 'string')
+    && typeof value.source.summary === 'string';
+}
+
+function hasStringFields<K extends string>(value: unknown, fields: readonly K[]): value is Record<K, string> {
+  return object(value) && fields.every((field) => typeof value[field] === 'string');
+}
+
+function publicResult<T>(value: unknown, validate: (item: unknown) => item is T): PublicResult<T> {
+  if (!object(value) || !object(value.source) || typeof value.source.title !== 'string'
+    || typeof value.source.url !== 'string' || typeof value.retrieved_at !== 'string'
+    || !Array.isArray(value.items) || !value.items.every(validate)) {
+    throw new ApiError('공공데이터 응답 형식이 올바르지 않습니다.');
+  }
+  return {
+    source: { title: value.source.title, url: value.source.url },
+    retrieved_at: value.retrieved_at,
+    items: value.items,
+  };
 }
 
 function verify<T>(value: unknown, validate: (value: unknown) => value is T): T {
@@ -87,6 +128,24 @@ function verify<T>(value: unknown, validate: (value: unknown) => value is T): T 
 export const api = {
   demo: async () => verify(await request<unknown>('/api/demo'), isDemo),
   integrations: async () => verify(await request<unknown>('/api/integrations'), isIntegrations),
+  activity: async (id: Id) => verify(await request<unknown>(`/api/tasks/${encodeURIComponent(String(id))}/activity`), isActivity),
+  draft: async (category: Category) => verify(await request<unknown>(
+    '/api/agent/draft', json('POST', { category, acknowledged: true }), 80000,
+  ), isDraftResponse),
+  hospitals: async (name: string) => publicResult<Hospital>(
+    await request<unknown>(`/api/public/hospitals?name=${encodeURIComponent(name)}`),
+    (item): item is Hospital => hasStringFields(item, ['id', 'name', 'address', 'phone', 'type']),
+  ),
+  specialties: async (id: string) => publicResult<Specialty>(
+    await request<unknown>(`/api/public/hospital-specialties?hospital_id=${encodeURIComponent(id)}`),
+    (item): item is Specialty => hasStringFields(item, ['name', 'specialists']),
+  ),
+  vaccines: async () => publicResult<Vaccine>(await request<unknown>('/api/public/vaccines'),
+    (item): item is Vaccine => hasStringFields(item, ['code', 'name'])),
+  vaccineDetail: async (code: string) => publicResult<VaccineDetail>(
+    await request<unknown>(`/api/public/vaccines/${encodeURIComponent(code)}`),
+    (item): item is VaccineDetail => hasStringFields(item, ['title', 'message']),
+  ),
   createTask: (input: TaskInput) =>
     request<unknown>('/api/tasks', json('POST', {
       title: input.title,

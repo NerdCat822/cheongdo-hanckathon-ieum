@@ -7,3 +7,4 @@ python-dotenv==1.2.4
 httpx==0.28.1
 github-copilot-sdk==1.0.28
 agent-framework-core==1.24.0
+agent-framework-github-copilot==2.1.1
