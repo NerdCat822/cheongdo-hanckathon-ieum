@@ -1,10 +1,11 @@
 import os
+import logging
 import unittest
 from unittest.mock import patch
 
 import httpx
 
-from backend.public_data import PublicDataError, PublicDataService, PublicDataUnavailable
+from backend.public_data import PublicDataBusy, PublicDataError, PublicDataService, PublicDataUnavailable
 
 
 def xml(items, code="00"):
@@ -56,3 +57,26 @@ class PublicDataTests(unittest.IsolatedAsyncioTestCase):
                 with patch.dict(os.environ, {"DATA_GO_KR_SERVICE_KEY": "test-key"}):
                     with self.assertRaises(PublicDataError):
                         await PublicDataService(transport=transport).vaccines()
+
+    async def test_rate_limit_and_http_logs_do_not_expose_key(self):
+        records = []
+
+        class Capture(logging.Handler):
+            def emit(self, record):
+                records.append(record.getMessage())
+
+        http_logger = logging.getLogger("httpx")
+        previous_level = http_logger.level
+        handler = Capture()
+        http_logger.setLevel(logging.INFO)
+        http_logger.addHandler(handler)
+        self.addCleanup(http_logger.removeHandler, handler)
+        self.addCleanup(http_logger.setLevel, previous_level)
+        transport = httpx.MockTransport(lambda _request: httpx.Response(200, text=xml("")))
+        with patch.dict(os.environ, {"DATA_GO_KR_SERVICE_KEY": "secret-test-key"}):
+            service = PublicDataService(transport=transport)
+            for _ in range(30):
+                await service.vaccines()
+            with self.assertRaises(PublicDataBusy):
+                await service.vaccines()
+        self.assertNotIn("secret-test-key", "\n".join(records))

@@ -1,20 +1,20 @@
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from agent_framework.exceptions import AgentException
 from copilot._jsonrpc import JsonRpcError, ProcessExitedError
-from fastapi import FastAPI, HTTPException, Path, Query, Request
+from fastapi import FastAPI, HTTPException, Path, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from sqlalchemy import insert, select, text, update
+from sqlalchemy import delete, func, insert, select, text, update
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.agent import AgentBusy, AgentInvalidResponse, AgentUnavailable, CopilotDraftService
 from backend.catalog import MEMBERS, PROFILE, SOURCES
-from backend.database import Database, DatabaseUnavailable, task_activity, tasks
-from backend.public_data import PublicDataError, PublicDataService, PublicDataUnavailable
-from backend.schemas import AssignmentRequest, AssignmentResponse, DraftRequest, TaskCreate, TaskPatch
+from backend.database import Database, DatabaseUnavailable, ai_usage, task_activity, tasks
+from backend.public_data import PublicDataBusy, PublicDataError, PublicDataService, PublicDataUnavailable
+from backend.schemas import AssignmentRequest, AssignmentResponse, DraftRequest, HospitalDetailRequest, HospitalSearch, TaskCreate, TaskPatch
 
 DEMO_WARNING = (
     "인증·동의·권한 검증이 없는 공개 가상 시연입니다. "
@@ -33,6 +33,7 @@ def create_app(database=None, draft_service=None, public_data_service=None):
     app.state.database = database if database is not None else Database()
     app.state.draft_service = draft_service if draft_service is not None else CopilotDraftService()
     app.state.public_data = public_data_service if public_data_service is not None else PublicDataService()
+    app.state.ai_daily_limit = 10
 
     def record_activity(connection, task_id, kind, detail):
         connection.execute(insert(task_activity).values(
@@ -67,6 +68,10 @@ def create_app(database=None, draft_service=None, public_data_service=None):
     @app.exception_handler(PublicDataError)
     async def public_data_error(_request: Request, _exc: PublicDataError):
         return JSONResponse(status_code=502, content={"detail": "공공데이터를 조회하지 못했습니다. 잠시 후 다시 시도해 주세요."})
+
+    @app.exception_handler(PublicDataBusy)
+    async def public_data_busy(_request: Request, _exc: PublicDataBusy):
+        return JSONResponse(status_code=429, content={"detail": "공공데이터 요청이 많습니다. 잠시 후 다시 시도해 주세요."})
 
     def find_task(connection, task_id, *, lock=False):
         query = select(tasks).where(tasks.c.task_id == task_id)
@@ -184,10 +189,23 @@ def create_app(database=None, draft_service=None, public_data_service=None):
                 "reason": "Copilot 설정됨. 초안 생성 시 인증을 확인합니다."
                 if app.state.draft_service.available else AGENT_REASON,
             },
+            "jira": {"available": False, "reason": "외부 Jira 대신 자체 업무 보드를 사용합니다."},
         }
 
     @app.post("/api/agent/draft")
     async def agent_draft(payload: DraftRequest):
+        if not app.state.draft_service.available:
+            raise HTTPException(status_code=503, detail=AGENT_REASON)
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(days=1)
+        with app.state.database.transaction() as connection:
+            if connection.dialect.name == "postgresql":
+                connection.execute(text("SELECT pg_advisory_xact_lock(1729104513)"))
+            connection.execute(delete(ai_usage).where(ai_usage.c.created_at < cutoff))
+            count = connection.execute(select(func.count()).select_from(ai_usage)).scalar_one()
+            if count >= app.state.ai_daily_limit:
+                raise HTTPException(status_code=429, detail="공개 시연의 AI 하루 요청 한도에 도달했습니다.")
+            connection.execute(insert(ai_usage).values(request_id=uuid4().hex, created_at=now))
         try:
             return await app.state.draft_service.generate(payload.category)
         except AgentBusy:
@@ -200,16 +218,13 @@ def create_app(database=None, draft_service=None, public_data_service=None):
             logger.warning("Copilot draft failed (%s)", type(exc).__name__)
             raise HTTPException(status_code=503, detail="Copilot 연결에 실패했습니다. 인증과 모델 설정을 확인해 주세요.") from None
 
-    @app.get("/api/public/hospitals")
-    async def hospitals(name: str):
-        name = name.strip()
-        if not name or len(name) > 100:
-            raise HTTPException(status_code=422, detail="병원 이름은 1~100자로 입력해 주세요.")
-        return await app.state.public_data.hospitals(name)
+    @app.post("/api/public/hospitals")
+    async def hospitals(payload: HospitalSearch):
+        return await app.state.public_data.hospitals(payload.name)
 
-    @app.get("/api/public/hospital-specialties")
-    async def hospital_specialties(hospital_id: str = Query(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9+/=]+$")):
-        return await app.state.public_data.hospital_specialties(hospital_id)
+    @app.post("/api/public/hospital-specialties")
+    async def hospital_specialties(payload: HospitalDetailRequest):
+        return await app.state.public_data.hospital_specialties(payload.hospital_id)
 
     @app.get("/api/public/vaccines")
     async def vaccines():

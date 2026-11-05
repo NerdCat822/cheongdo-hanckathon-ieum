@@ -9,6 +9,8 @@ from collections import deque
 from agent_framework import tool
 from agent_framework.github import GitHubCopilotAgent
 from copilot import CopilotClient
+from copilot.generated.rpc import PermissionDecisionApproveOnce, PermissionDecisionReject
+from copilot.generated.session_events import PermissionRequestCustomTool
 from pydantic import ValidationError
 
 from backend.catalog import SOURCES
@@ -36,6 +38,17 @@ class AgentBusy(Exception):
 
 class AgentInvalidResponse(Exception):
     pass
+
+
+def source_permission(request, _invocation):
+    if (
+        isinstance(request, PermissionRequestCustomTool)
+        and request.tool_name == "lookup_care_source"
+        and not request.managed_approval_required
+        and request.args in (None, {})
+    ):
+        return PermissionDecisionApproveOnce()
+    return PermissionDecisionReject()
 
 
 def parse_response(text):
@@ -75,7 +88,7 @@ class CopilotDraftService:
         self._running = True
         self._requests.append(now)
         try:
-            return await asyncio.wait_for(self._generate(category), timeout=75)
+            return await asyncio.wait_for(self._generate(category), timeout=40)
         except TimeoutError as exc:
             raise AgentUnavailable() from exc
         finally:
@@ -92,13 +105,15 @@ class CopilotDraftService:
             return json.dumps(source, ensure_ascii=False)
 
         with tempfile.TemporaryDirectory(prefix="ieum-copilot-") as directory:
-            client = CopilotClient(
+            client = await asyncio.to_thread(
+                CopilotClient,
                 mode="empty",
                 base_directory=directory,
                 github_token=self.token,
                 use_logged_in_user=self.use_login if not self.token else False,
             )
-            async with client:
+            try:
+                await client.start()
                 status = await client.get_auth_status()
                 if not status.isAuthenticated:
                     raise AgentUnavailable()
@@ -108,24 +123,27 @@ class CopilotDraftService:
                     tools=[lookup_care_source],
                     default_options={
                         "model": self.model,
-                        "timeout": 60,
+                        "timeout": 35,
                         "available_tools": ["custom:lookup_care_source"],
                         "enable_config_discovery": False,
                         "enable_file_hooks": False,
                         "enable_session_store": False,
                         "enable_session_telemetry": False,
+                        "on_permission_request": source_permission,
                     },
                 )
                 session = agent.create_session()
+                async with agent:
+                    result = await agent.run(
+                        f"가상 주제: {category}. 참고 정보를 조회하고 확인 업무 초안을 작성하세요.",
+                        session=session,
+                    )
+            finally:
                 try:
-                    async with agent:
-                        result = await agent.run(
-                            f"가상 주제: {category}. 참고 정보를 조회하고 확인 업무 초안을 작성하세요.",
-                            session=session,
-                        )
-                finally:
-                    if session.service_session_id:
-                        await client.delete_session(session.service_session_id)
+                    await asyncio.wait_for(client.stop(), timeout=4)
+                except TimeoutError:
+                    logger.warning("Copilot runtime shutdown timed out")
+                    await asyncio.wait_for(client.force_stop(), timeout=3)
         if not called:
             raise AgentInvalidResponse()
         parsed = parse_response(result.text)

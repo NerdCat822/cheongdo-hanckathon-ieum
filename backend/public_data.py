@@ -1,4 +1,7 @@
+import logging
 import os
+import time
+from collections import deque
 from datetime import datetime, timezone
 from xml.etree import ElementTree
 
@@ -11,6 +14,18 @@ class PublicDataUnavailable(Exception):
 
 class PublicDataError(Exception):
     pass
+
+
+class PublicDataBusy(Exception):
+    pass
+
+
+class PublicDataLogFilter(logging.Filter):
+    def filter(self, record):
+        return "apis.data.go.kr" not in record.getMessage()
+
+
+logging.getLogger("httpx").addFilter(PublicDataLogFilter())
 
 
 HOSPITAL_SOURCE = {
@@ -35,10 +50,19 @@ class PublicDataService:
     def __init__(self, transport=None):
         self.key = os.getenv("DATA_GO_KR_SERVICE_KEY") or os.getenv("PUBLIC_DECODING_KEY", "")
         self.transport = transport
+        self._requests = deque()
+        self._inflight = 0
 
     async def _get_xml(self, url, params, key_name):
         if not self.key:
             raise PublicDataUnavailable()
+        now = time.monotonic()
+        while self._requests and self._requests[0] <= now - 60:
+            self._requests.popleft()
+        if self._inflight >= 5 or len(self._requests) >= 30:
+            raise PublicDataBusy()
+        self._inflight += 1
+        self._requests.append(now)
         try:
             async with httpx.AsyncClient(
                 timeout=httpx.Timeout(10.0), transport=self.transport, follow_redirects=False, trust_env=False
@@ -52,6 +76,8 @@ class PublicDataService:
                             raise PublicDataError()
         except httpx.HTTPError as exc:
             raise PublicDataError() from exc
+        finally:
+            self._inflight -= 1
         if b"<!DOCTYPE" in data.upper() or b"<!ENTITY" in data.upper():
             raise PublicDataError()
         try:

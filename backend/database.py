@@ -71,6 +71,13 @@ task_activity = Table(
     Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
+ai_usage = Table(
+    "care_demo_ai_usage",
+    metadata,
+    Column("request_id", String(40), primary_key=True),
+    Column("created_at", DateTime(timezone=True), nullable=False, index=True),
+)
+
 SEED_MARKER = "chengdo_table_v1"
 SEED_NOTICE = "[가상 CSV 시연] 기존 담당 정보와 출처는 미확인입니다. 담당자 수락으로 간주하지 않습니다."
 VALID_CATEGORIES = {"benefit", "vaccination_checkup", "regular_visit"}

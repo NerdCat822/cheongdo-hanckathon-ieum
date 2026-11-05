@@ -365,7 +365,7 @@ function DraftPanel({ integration, loading, error, onReview }: { integration?: I
   const url = result && safeSourceUrl(result.source);
   return <section className="draft-panel" aria-labelledby="draft-title">
     <div className="section-heading"><div><h2 id="draft-title"><Sparkles size={22} aria-hidden="true" /> AI로 확인할 일 찾기</h2><p className="section-subtitle">Microsoft Agent Framework와 GitHub Copilot으로 가상 업무 초안을 제안합니다.</p></div></div>
-    <p>선택한 가상 분야만 Copilot에 전송합니다. 실제 이름, 건강정보 등은 입력하지 않습니다. 초안은 확인 후 직접 저장해야 합니다.</p>
+    <p>선택한 가상 분야만 Copilot에 전송합니다. 실제 이름, 건강정보 등은 입력하지 않습니다. 초안은 확인 후 직접 저장해야 합니다. 공개 시연은 전체 사용자 합산 하루 10회로 제한합니다.</p>
     {loading && <p role="status">AI 연동 상태를 확인 중입니다.</p>}
     {error && <ErrorMessage>{error}</ErrorMessage>}
     {!loading && integration && !integration.available && <p className="draft-disabled">현재 사용 불가: {integration.reason}</p>}
@@ -457,7 +457,7 @@ function SourceCard({ source }: { source: Source }) {
 function TaskEditor({ task, draft, initialCategory, sources, onClose, onSaved }: { task: Task | null; draft?: Draft; initialCategory?: Category; sources: Source[]; onClose: () => void; onSaved: (task: Task, created: boolean) => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [title, setTitle] = useState(task?.title ?? draft?.title ?? '');
-  const [description, setDescription] = useState(task?.description ?? draft?.description ?? '');
+  const [description, setDescription] = useState(task?.description ?? (draft ? `${draft.description}\n\n확인 필요: ${draft.uncertainty}` : ''));
   const [category, setCategory] = useState<Category>(task?.category ?? draft?.category ?? initialCategory ?? 'benefit');
   const [dueDate, setDueDate] = useState(task?.due_date ?? '');
   const [sourceId, setSourceId] = useState(task?.source_id != null ? String(task.source_id) : draft ? String(draft.source_id) : '');

@@ -102,9 +102,17 @@ class DraftRequest(InputModel):
 
 class DraftItem(InputModel):
     title: Title
-    description: Description
+    description: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1400)]
     uncertainty: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
 
 
 class DraftResult(InputModel):
     drafts: Annotated[list[DraftItem], Field(min_length=1, max_length=3)]
+
+
+class HospitalSearch(InputModel):
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+
+
+class HospitalDetailRequest(InputModel):
+    hospital_id: Annotated[str, StringConstraints(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9+/=]+$")]

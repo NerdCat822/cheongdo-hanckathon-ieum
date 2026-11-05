@@ -6,9 +6,11 @@ from unittest.mock import patch
 from uuid import uuid4
 
 from copilot.generated.session_events import AssistantMessageData, SessionEvent, SessionEventType
+from copilot.generated.session_events import PermissionRequestCustomTool, PermissionRequestRead
+from copilot.generated.rpc import PermissionDecisionApproveOnce, PermissionDecisionReject
 from copilot.tools import ToolInvocation
 
-from backend.agent import AgentBusy, AgentInvalidResponse, AgentUnavailable, CopilotDraftService, parse_response
+from backend.agent import AgentBusy, AgentInvalidResponse, AgentUnavailable, CopilotDraftService, parse_response, source_permission
 
 
 class FakeSession:
@@ -44,6 +46,7 @@ class FakeClient:
         self.options = options
         self.session_options = None
         self.deleted = []
+        self.stopped = False
         self.tool_result = None
         FakeClient.instance = self
 
@@ -58,7 +61,7 @@ class FakeClient:
         pass
 
     async def stop(self):
-        pass
+        self.stopped = True
 
     async def get_auth_status(self):
         return SimpleNamespace(isAuthenticated=True)
@@ -72,7 +75,7 @@ class FakeClient:
 
 
 class AgentTests(unittest.IsolatedAsyncioTestCase):
-    async def test_real_framework_bridge_calls_sdk_tool_and_removes_session(self):
+    async def test_real_framework_bridge_calls_sdk_tool_and_cleans_up(self):
         with patch.dict(os.environ, {"CARE_AI_ENABLED": "true", "COPILOT_GITHUB_TOKEN": "fake-oauth"}, clear=False):
             with patch("backend.agent.CopilotClient", FakeClient):
                 result = await CopilotDraftService().generate("benefit")
@@ -81,9 +84,12 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(client.options["use_logged_in_user"])
         self.assertEqual(client.session_options["available_tools"], ["custom:lookup_care_source"])
         self.assertFalse(client.session_options["enable_file_hooks"])
+        permission = PermissionRequestCustomTool(tool_description="source", tool_name="lookup_care_source", args={})
+        self.assertIsInstance(await client.session_options["on_permission_request"](permission, {}), PermissionDecisionApproveOnce)
         self.assertEqual(client.tool_result.result_type, "success")
         self.assertIn("보건복지부", client.tool_result.text_result_for_llm)
-        self.assertEqual(client.deleted, ["test-session"])
+        self.assertTrue(client.stopped)
+        self.assertFalse(os.path.exists(client.options["base_directory"]))
         self.assertEqual(result["drafts"][0]["source_id"], "benefit")
         self.assertEqual(result["source"]["provider"], "보건복지부")
 
@@ -92,7 +98,8 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
             with patch("backend.agent.CopilotClient", FakeClient), patch.object(FakeClient, "call_tool", False):
                 with self.assertRaises(AgentInvalidResponse):
                     await CopilotDraftService().generate("benefit")
-        self.assertEqual(FakeClient.instance.deleted, ["test-session"])
+        self.assertTrue(FakeClient.instance.stopped)
+        self.assertFalse(os.path.exists(FakeClient.instance.options["base_directory"]))
 
     async def test_disabled_and_rate_limited(self):
         with patch.dict(os.environ, {"CARE_AI_ENABLED": "false", "COPILOT_GITHUB_TOKEN": ""}):
@@ -113,3 +120,15 @@ class AgentTests(unittest.IsolatedAsyncioTestCase):
         ):
             with self.subTest(invalid=invalid), self.assertRaises(AgentInvalidResponse):
                 parse_response(invalid)
+
+    def test_only_the_read_only_source_tool_can_be_approved(self):
+        source = PermissionRequestCustomTool(tool_description="source", tool_name="lookup_care_source", args={})
+        self.assertIsInstance(source_permission(source, {}), PermissionDecisionApproveOnce)
+        for request in (
+            PermissionRequestCustomTool(tool_description="x", tool_name="other", args={}),
+            PermissionRequestCustomTool(tool_description="x", tool_name="lookup_care_source", args={"path": "/"}),
+            PermissionRequestCustomTool(tool_description="x", tool_name="lookup_care_source", args={}, managed_approval_required=True),
+            PermissionRequestRead(path="/tmp", intention="read"),
+        ):
+            with self.subTest(request=request):
+                self.assertIsInstance(source_permission(request, {}), PermissionDecisionReject)

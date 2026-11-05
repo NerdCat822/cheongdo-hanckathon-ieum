@@ -27,8 +27,8 @@ async function request<T>(path: string, options?: RequestInit, timeout = 15000):
       404: '요청한 시연 데이터를 찾을 수 없습니다.',
       409: '현재 상태에서는 처리할 수 없습니다. 담당 요청과 할 일 상태를 확인해 주세요.',
       422: '입력 내용이 올바르지 않습니다. 필수 항목과 형식을 확인해 주세요.',
-      429: 'AI 요청이 많습니다. 잠시 후 다시 시도해 주세요.',
-      502: 'AI 초안이나 출처 확인에 실패했습니다. 다시 시도해 주세요.',
+      429: '요청이 많습니다. 잠시 후 다시 시도해 주세요.',
+      502: '외부 정보를 확인하지 못했습니다. 다시 시도해 주세요.',
       503: '서버 또는 시연 연동을 현재 사용할 수 없습니다.',
     };
     throw new ApiError(`${detail[response.status] ?? '요청을 처리하지 못했습니다.'} (오류 ${response.status})`);
@@ -130,14 +130,14 @@ export const api = {
   integrations: async () => verify(await request<unknown>('/api/integrations'), isIntegrations),
   activity: async (id: Id) => verify(await request<unknown>(`/api/tasks/${encodeURIComponent(String(id))}/activity`), isActivity),
   draft: async (category: Category) => verify(await request<unknown>(
-    '/api/agent/draft', json('POST', { category, acknowledged: true }), 80000,
+    '/api/agent/draft', json('POST', { category, acknowledged: true }), 50000,
   ), isDraftResponse),
   hospitals: async (name: string) => publicResult<Hospital>(
-    await request<unknown>(`/api/public/hospitals?name=${encodeURIComponent(name)}`),
+    await request<unknown>('/api/public/hospitals', json('POST', { name })),
     (item): item is Hospital => hasStringFields(item, ['id', 'name', 'address', 'phone', 'type']),
   ),
   specialties: async (id: string) => publicResult<Specialty>(
-    await request<unknown>(`/api/public/hospital-specialties?hospital_id=${encodeURIComponent(id)}`),
+    await request<unknown>('/api/public/hospital-specialties', json('POST', { hospital_id: id })),
     (item): item is Specialty => hasStringFields(item, ['name', 'specialists']),
   ),
   vaccines: async () => publicResult<Vaccine>(await request<unknown>('/api/public/vaccines'),

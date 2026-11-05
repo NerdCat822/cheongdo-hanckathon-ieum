@@ -227,7 +227,7 @@ class ApiTests(unittest.TestCase):
         self.addCleanup(logging.getLogger().removeHandler, handler)
         with patch("socket.socket.connect", side_effect=AssertionError("unexpected network")):
             integrations = self.client.get("/api/integrations").json()
-            self.assertEqual(set(integrations), {"agent"})
+            self.assertEqual(set(integrations), {"agent", "jira"})
             for value in integrations.values():
                 self.assertEqual(set(value), {"available", "reason"})
                 self.assertIs(value["available"], False)
@@ -285,6 +285,42 @@ class ApiTests(unittest.TestCase):
             approved["title"] = "사용자가 수정한 확인 업무"
             self.assertEqual(client.post("/api/tasks", json=approved).status_code, 201)
             self.assertEqual(len(client.get("/api/demo").json()["tasks"]), before + 1)
+
+    def test_ai_daily_limit_persists_across_app_instances(self):
+        class FakeDraftService:
+            available = True
+
+            async def generate(self, category):
+                return {"drafts": [], "source": {"id": category}}
+
+        app = create_app(Database(self.engine), FakeDraftService())
+        app.state.ai_daily_limit = 2
+        payload = {"category": "benefit", "acknowledged": True}
+        with TestClient(app) as client:
+            self.assertEqual(client.post("/api/agent/draft", json=payload).status_code, 200)
+            self.assertEqual(client.post("/api/agent/draft", json=payload).status_code, 200)
+            self.assertEqual(client.post("/api/agent/draft", json=payload).status_code, 429)
+        restarted = create_app(Database(self.engine), FakeDraftService())
+        restarted.state.ai_daily_limit = 2
+        with TestClient(restarted) as client:
+            self.assertEqual(client.post("/api/agent/draft", json=payload).status_code, 429)
+
+    def test_public_hospital_queries_validate_and_use_request_body(self):
+        class FakePublicData:
+            async def hospitals(self, name):
+                return {"name": name}
+
+            async def hospital_specialties(self, hospital_id):
+                return {"hospital_id": hospital_id}
+
+        with TestClient(create_app(Database(self.engine), public_data_service=FakePublicData())) as client:
+            response = client.post("/api/public/hospitals", json={"name": "  청도  "})
+            self.assertEqual(response.json(), {"name": "청도"})
+            self.assertEqual(client.post("/api/public/hospitals", json={"name": " "}).status_code, 422)
+            self.assertEqual(client.post("/api/public/hospitals", json={"name": "x", "extra": "x"}).status_code, 422)
+            response = client.post("/api/public/hospital-specialties", json={"hospital_id": "abc+/="})
+            self.assertEqual(response.json(), {"hospital_id": "abc+/="})
+            self.assertEqual(client.post("/api/public/hospital-specialties", json={"hospital_id": "../x"}).status_code, 422)
 
     def test_failed_initialization_is_not_marked_and_can_recover(self):
         with self.engine.begin() as connection:
