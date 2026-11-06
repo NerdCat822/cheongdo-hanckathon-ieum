@@ -73,9 +73,9 @@ AI 초안을 승인하기 전 체크리스트 업무가 생성되지 않는지 �
 항목
 비중
 제품 반영
-Copilot SDK와 Microsoft Agent Framework
+에이전트 오케스트레이션 (LangGraph 멀티 에이전트)
 25%
-출처 조회, 초안, 도구 오케스트레이션, 승인, 스트리밍을 검증한다.
+출처 조회, 초안, 도구 오케스트레이션, 검토, 승인, 스트리밍을 검증한다.
 생산성·문제 적합성
 18%
 가족의 업무 발견·분담·추적을 시험한다.
@@ -95,7 +95,7 @@ UX·워크플로
 5%
 에이전트를 가족 돌봄 업무 조정에 적용한다.
 
-주의: 2026-11-06 구현은 Microsoft Agent Framework·Copilot SDK 대신 LangGraph 멀티 에이전트를 사용한다. 'Copilot SDK와 Microsoft Agent Framework' 항목(25%)의 평가 기준과 충돌하므로 가중치 조정이나 재연동 여부를 제품 결정으로 정해야 한다.
+2026-11-06: Copilot SDK와 Microsoft Agent Framework 항목은 더 쓰지 않는다. 같은 비중(25%)으로 LangGraph 멀티 에이전트 오케스트레이션 항목으로 바꿨다.
 
 출처와 참고문헌
 
