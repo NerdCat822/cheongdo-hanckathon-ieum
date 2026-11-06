@@ -57,10 +57,34 @@ export interface Draft {
   source_id: Id;
 }
 
+export interface TraceStep {
+  step: string;
+  label: string;
+  agent: string;
+  status: string;
+  detail: string;
+  at: string;
+}
+
+export interface DraftStep {
+  step: string;
+  label: string;
+  agent: string;
+  at: string;
+}
+
+export interface DraftReview {
+  approved: boolean;
+  attempts: number;
+  checked_by: string;
+}
+
 export interface DraftResponse {
   drafts: Draft[];
   source: Source;
   evidence: PublicResult<Vaccine> | null;
+  review?: DraftReview;
+  trace?: TraceStep[];
 }
 
 export interface PublicResult<T> {

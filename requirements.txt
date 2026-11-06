@@ -5,6 +5,8 @@ psycopg[binary]==3.3.8
 alembic==1.20.1
 python-dotenv==1.2.4
 httpx==0.28.1
-github-copilot-sdk==1.0.28
-agent-framework-core==1.24.0
-agent-framework-github-copilot==2.1.1
+langgraph==1.2.20
+langchain==1.4.9
+langchain-core==1.7.6
+langchain-openai==1.7.4
+langchain-anthropic==1.7.10

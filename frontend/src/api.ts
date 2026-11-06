@@ -1,4 +1,4 @@
-import type { Activity, Category, Demo, DraftResponse, Hospital, Id, Integrations, PublicResult, Specialty, Task, TaskInput, TaskStatus, Vaccine, VaccineDetail } from './types';
+import type { Activity, Category, Demo, DraftResponse, DraftStep, Hospital, Id, Integrations, PublicResult, Specialty, Task, TaskInput, TaskStatus, Vaccine, VaccineDetail } from './types';
 
 export class ApiError extends Error {
   constructor(message: string) {
@@ -7,7 +7,28 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, options?: RequestInit, timeout = 15000): Promise<T> {
+const STATUS_MESSAGES: Record<number, string> = {
+  403: '이 시연 요청에 응답할 수 없습니다.',
+  404: '요청한 시연 데이터를 찾을 수 없습니다.',
+  409: '현재 상태에서는 처리할 수 없습니다. 담당 요청과 할 일 상태를 확인해 주세요.',
+  422: '입력 내용이 올바르지 않습니다. 필수 항목과 형식을 확인해 주세요.',
+  429: '요청이 많습니다. 잠시 후 다시 시도해 주세요.',
+  502: '외부 정보를 확인하지 못했습니다. 다시 시도해 주세요.',
+  503: '서버 또는 시연 연동을 현재 사용할 수 없습니다.',
+};
+
+function statusError(status: number): ApiError {
+  return new ApiError(`${STATUS_MESSAGES[status] ?? '요청을 처리하지 못했습니다.'} (오류 ${status})`);
+}
+
+function connectionError(error: unknown): ApiError {
+  if (error instanceof DOMException && error.name === 'TimeoutError') {
+    return new ApiError('요청 시간이 초과되었습니다.');
+  }
+  return new ApiError('서버에 연결하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.');
+}
+
+async function send(path: string, options?: RequestInit, timeout = 15000): Promise<Response> {
   let response: Response;
   try {
     response = await fetch(path, {
@@ -16,23 +37,14 @@ async function request<T>(path: string, options?: RequestInit, timeout = 15000):
       headers: { 'Content-Type': 'application/json', ...options?.headers },
     });
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'TimeoutError') {
-      throw new ApiError('요청 시간이 초과되었습니다.');
-    }
-    throw new ApiError('서버에 연결하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.');
+    throw connectionError(error);
   }
-  if (!response.ok) {
-    const detail: Record<number, string> = {
-      403: '이 시연 요청에 응답할 수 없습니다.',
-      404: '요청한 시연 데이터를 찾을 수 없습니다.',
-      409: '현재 상태에서는 처리할 수 없습니다. 담당 요청과 할 일 상태를 확인해 주세요.',
-      422: '입력 내용이 올바르지 않습니다. 필수 항목과 형식을 확인해 주세요.',
-      429: '요청이 많습니다. 잠시 후 다시 시도해 주세요.',
-      502: '외부 정보를 확인하지 못했습니다. 다시 시도해 주세요.',
-      503: '서버 또는 시연 연동을 현재 사용할 수 없습니다.',
-    };
-    throw new ApiError(`${detail[response.status] ?? '요청을 처리하지 못했습니다.'} (오류 ${response.status})`);
-  }
+  if (!response.ok) throw statusError(response.status);
+  return response;
+}
+
+async function request<T>(path: string, options?: RequestInit, timeout = 15000): Promise<T> {
+  const response = await send(path, options, timeout);
   try {
     return (await response.json()) as T;
   } catch {
@@ -91,6 +103,10 @@ function isActivity(value: unknown): value is Activity[] {
     && typeof item.kind === 'string' && typeof item.detail === 'string' && typeof item.created_at === 'string');
 }
 
+function isDraftStep(value: unknown): value is DraftStep {
+  return hasStringFields(value, ['step', 'label', 'agent', 'at']);
+}
+
 function isDraftResponse(value: unknown): value is DraftResponse {
   return object(value) && Array.isArray(value.drafts) && value.drafts.length > 0 && value.drafts.length <= 3
     && value.drafts.every((item: unknown) => object(item) && typeof item.title === 'string'
@@ -104,7 +120,11 @@ function isDraftResponse(value: unknown): value is DraftResponse {
     && (value.evidence === null || (object(value.evidence) && object(value.evidence.source)
       && typeof value.evidence.source.title === 'string' && typeof value.evidence.source.url === 'string'
       && typeof value.evidence.retrieved_at === 'string' && Array.isArray(value.evidence.items)
-      && value.evidence.items.every((item: unknown) => hasStringFields(item, ['code', 'name']))));
+      && value.evidence.items.every((item: unknown) => hasStringFields(item, ['code', 'name']))))
+    && (value.review === undefined || (object(value.review) && typeof value.review.approved === 'boolean'
+      && typeof value.review.attempts === 'number' && typeof value.review.checked_by === 'string'))
+    && (value.trace === undefined || (Array.isArray(value.trace)
+      && value.trace.every((item: unknown) => hasStringFields(item, ['step', 'label', 'agent', 'status', 'detail', 'at']))));
 }
 
 function hasStringFields<K extends string>(value: unknown, fields: readonly K[]): value is Record<K, string> {
@@ -129,13 +149,62 @@ function verify<T>(value: unknown, validate: (value: unknown) => value is T): T 
   return value;
 }
 
+function parseSseBlock(block: string): { kind: string; data: unknown } | null {
+  let kind = 'message';
+  const dataLines: string[] = [];
+  for (const line of block.split('\n')) {
+    if (line.startsWith('event:')) kind = line.slice(6).trim();
+    else if (line.startsWith('data:')) dataLines.push(line.slice(5).trim());
+  }
+  if (dataLines.length === 0) return null;
+  try {
+    return { kind, data: JSON.parse(dataLines.join('\n')) as unknown };
+  } catch {
+    throw new ApiError('서버 응답을 읽지 못했습니다. 다시 시도해 주세요.');
+  }
+}
+
+async function draftStream(category: Category, onStep: (step: DraftStep) => void): Promise<DraftResponse> {
+  const response = await send('/api/agent/draft/stream', json('POST', { category, acknowledged: true }), 150000);
+  if (!response.body) throw new ApiError('서버 응답을 읽지 못했습니다. 다시 시도해 주세요.');
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let result: DraftResponse | null = null;
+  const handle = (block: string) => {
+    const event = parseSseBlock(block);
+    if (!event) return;
+    if (event.kind === 'step' && isDraftStep(event.data)) onStep(event.data);
+    else if (event.kind === 'result') result = verify(event.data, isDraftResponse);
+    else if (event.kind === 'error') {
+      const status = object(event.data) && typeof event.data.status === 'number' ? event.data.status : 503;
+      throw statusError(status);
+    }
+  };
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let boundary = buffer.indexOf('\n\n');
+    while (boundary >= 0) {
+      handle(buffer.slice(0, boundary));
+      buffer = buffer.slice(boundary + 2);
+      boundary = buffer.indexOf('\n\n');
+    }
+  }
+  if (buffer.trim()) handle(buffer);
+  if (!result) throw new ApiError('AI 초안 응답이 끊어졌습니다. 다시 시도해 주세요.');
+  return result;
+}
+
 export const api = {
   demo: async () => verify(await request<unknown>('/api/demo'), isDemo),
   integrations: async () => verify(await request<unknown>('/api/integrations'), isIntegrations),
   activity: async (id: Id) => verify(await request<unknown>(`/api/tasks/${encodeURIComponent(String(id))}/activity`), isActivity),
   draft: async (category: Category) => verify(await request<unknown>(
-    '/api/agent/draft', json('POST', { category, acknowledged: true }), 50000,
+    '/api/agent/draft', json('POST', { category, acknowledged: true }), 150000,
   ), isDraftResponse),
+  draftStream,
   hospitals: async (name: string) => publicResult<Hospital>(
     await request<unknown>('/api/public/hospitals', json('POST', { name })),
     (item): item is Hospital => hasStringFields(item, ['id', 'name', 'address', 'phone', 'type']),
@@ -148,8 +217,7 @@ export const api = {
     (item): item is Vaccine => hasStringFields(item, ['code', 'name'])),
   vaccineDetail: async (code: string) => publicResult<VaccineDetail>(
     await request<unknown>(`/api/public/vaccines/${encodeURIComponent(code)}`),
-    (item): item is VaccineDetail => hasStringFields(item, ['title', 'message']),
-  ),
+    (item): item is VaccineDetail => hasStringFields(item, ['title', 'message'])),
   createTask: (input: TaskInput) =>
     request<unknown>('/api/tasks', json('POST', {
       title: input.title,

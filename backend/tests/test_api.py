@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.pool import StaticPool
 
+from backend.agent import AgentInvalidResponse
 from backend.app import create_app
 from backend.database import Database, SEED_NOTICE, metadata
 
@@ -304,6 +305,46 @@ class ApiTests(unittest.TestCase):
         restarted.state.ai_daily_limit = 2
         with TestClient(restarted) as client:
             self.assertEqual(client.post("/api/agent/draft", json=payload).status_code, 429)
+
+    def test_draft_stream_sends_steps_result_and_counts_toward_daily_limit(self):
+        class FakeDraftService:
+            available = True
+
+            def describe(self):
+                return "테스트 에이전트"
+
+            async def generate(self, category, on_step=None):
+                for step in ("intake", "drafter", "reviewer"):
+                    await on_step({"step": step, "label": step, "agent": "test", "at": "2026-11-06T00:00:00+00:00"})
+                return {"drafts": [], "source": {"id": category}, "trace": []}
+
+        app = create_app(Database(self.engine), FakeDraftService())
+        app.state.ai_daily_limit = 1
+        with TestClient(app) as client:
+            self.assertEqual(client.get("/api/integrations").json()["agent"], {"available": True, "reason": "테스트 에이전트"})
+            response = client.post("/api/agent/draft/stream", json={"category": "benefit", "acknowledged": True})
+            self.assertEqual(response.status_code, 200)
+            self.assertTrue(response.headers["content-type"].startswith("text/event-stream"))
+            events = [block for block in response.text.split("\n\n") if block]
+            self.assertEqual([block.splitlines()[0] for block in events],
+                             ["event: step", "event: step", "event: step", "event: result"])
+            self.assertIn('"drafts": []', events[-1])
+            self.assertEqual(client.post("/api/agent/draft/stream", json={"category": "benefit", "acknowledged": True}).status_code, 429)
+            self.assertEqual(client.post("/api/agent/draft/stream", json={"category": "benefit"}).status_code, 422)
+
+    def test_draft_stream_reports_agent_failure_as_error_event(self):
+        class FailingDraftService:
+            available = True
+
+            async def generate(self, category, on_step=None):
+                raise AgentInvalidResponse()
+
+        with TestClient(create_app(Database(self.engine), FailingDraftService())) as client:
+            response = client.post("/api/agent/draft/stream", json={"category": "benefit", "acknowledged": True})
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("event: error", response.text)
+            self.assertIn('"status": 502', response.text)
+            self.assertEqual(client.post("/api/agent/draft", json={"category": "benefit", "acknowledged": True}).status_code, 502)
 
     def test_public_hospital_queries_validate_and_use_request_body(self):
         class FakePublicData:

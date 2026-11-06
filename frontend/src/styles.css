@@ -64,6 +64,13 @@ h3 { margin-bottom: 8px; font-size: 20px; line-height: 1.4; }
 .draft-item { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: white; }
 .draft-item h3, .draft-item p { margin: 0 0 6px; overflow-wrap: anywhere; }
 .draft-actions { display: flex; align-items: center; gap: 12px; }
+.draft-stage { font-weight: 700; color: var(--green); }
+.draft-trace { margin-top: 14px; font-size: 15px; color: var(--muted); }
+.draft-trace summary { cursor: pointer; font-weight: 700; color: var(--ink); }
+.draft-trace ol { margin: 8px 0 0; padding-left: 22px; }
+.draft-trace li { margin: 4px 0; overflow-wrap: anywhere; }
+.trace-agent { display: inline-block; margin-right: 6px; padding: 0 6px; border-radius: 6px; background: var(--green-soft); color: var(--green); font-weight: 700; }
+.trace-status { color: var(--muted); font-size: 13px; }
 .view-switch { display: flex; gap: 8px; margin: 12px 0; }
 .view-switch button { padding: 8px 14px; border: 1px solid var(--line); border-radius: 10px; background: white; color: var(--ink); font-weight: 700; }
 .view-switch button[aria-pressed="true"] { border-color: var(--green); background: var(--green-soft); }

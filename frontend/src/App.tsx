@@ -20,6 +20,12 @@ const categoryIcons: Record<Category, string> = {
   regular_visit: '💬',
 };
 const statuses: TaskStatus[] = ['확인 필요', '담당 요청', '진행 중', '완료', '해당 없음'];
+const agentLabels: Record<string, string> = {
+  orchestrator: '오케스트레이터',
+  evidence: '근거 수집',
+  drafter: '초안 작성 에이전트',
+  reviewer: '검토 에이전트',
+};
 type QuickFilter = 'all' | 'overdue' | 'upcoming' | 'unassigned';
 
 function isOpen(task: Task) {
@@ -349,35 +355,41 @@ function DraftPanel({ integration, loading, error, onReview }: { integration?: I
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<DraftResponse | null>(null);
   const [requestError, setRequestError] = useState('');
+  const [stage, setStage] = useState('');
 
   const generate = async () => {
     setGenerating(true);
     setRequestError('');
     setResult(null);
+    setStage('에이전트 준비 중');
     try {
-      setResult(await api.draft(category));
+      setResult(await api.draftStream(category, (step) => setStage(step.label)));
     } catch (err) {
       setRequestError(err instanceof Error ? err.message : '초안을 만들지 못했습니다.');
     } finally {
       setGenerating(false);
+      setStage('');
     }
   };
   const url = result && safeSourceUrl(result.source);
   return <section className="draft-panel" aria-labelledby="draft-title">
-    <div className="section-heading"><div><h2 id="draft-title"><Sparkles size={22} aria-hidden="true" /> AI로 확인할 일 찾기</h2><p className="section-subtitle">Microsoft Agent Framework와 GitHub Copilot으로 가상 업무 초안을 제안합니다.</p></div></div>
-    <p>선택한 가상 분야만 Copilot에 전송합니다. 실제 이름, 건강정보 등은 입력하지 않습니다. 초안은 확인 후 직접 저장해야 합니다. 공개 시연은 전체 사용자 합산 하루 10회로 제한합니다.</p>
+    <div className="section-heading"><div><h2 id="draft-title"><Sparkles size={22} aria-hidden="true" /> AI로 확인할 일 찾기</h2><p className="section-subtitle">LangGraph 멀티 에이전트(근거 수집 → 초안 작성 → 검토)가 가상 업무 초안을 제안합니다.</p></div></div>
+    <p>선택한 가상 분야만 설정된 AI 모델(기본 Anthropic Claude)에 전송합니다. 실제 이름, 건강정보 등은 입력하지 않습니다. 검토 에이전트를 통과한 초안만 보여주며, 초안은 확인 후 직접 저장해야 합니다. 공개 시연은 전체 사용자 합산 하루 10회로 제한합니다.</p>
     {loading && <p role="status">AI 연동 상태를 확인 중입니다.</p>}
     {error && <ErrorMessage>{error}</ErrorMessage>}
     {!loading && integration && !integration.available && <p className="draft-disabled">현재 사용 불가: {integration.reason}</p>}
     <div className="draft-controls">
       <label className="field"><span>가상 분야</span><select value={category} disabled={generating} onChange={(event) => setCategory(event.target.value as Category)}>{Object.entries(categories).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-      <label className="draft-consent"><input type="checkbox" checked={acknowledged} disabled={generating} onChange={(event) => setAcknowledged(event.target.checked)} /> 가상 분야를 Copilot에 보내 초안을 만드는 데 동의합니다.</label>
-      <button className="button button-primary" type="button" disabled={!integration?.available || !acknowledged || generating} onClick={() => void generate()}>{generating ? <><LoaderCircle size={18} className="spinner" aria-hidden="true" /> 초안 만드는 중</> : <><Sparkles size={18} aria-hidden="true" /> AI 초안 만들기</>}</button>
+      <label className="draft-consent"><input type="checkbox" checked={acknowledged} disabled={generating} onChange={(event) => setAcknowledged(event.target.checked)} /> 가상 분야를 외부 AI 모델에 보내 초안을 만드는 데 동의합니다.</label>
+      <button className="button button-primary" type="button" disabled={!integration?.available || !acknowledged || generating} onClick={() => void generate()}>{generating ? <><LoaderCircle size={18} className="spinner" aria-hidden="true" /> {stage || '초안 만드는 중'}</> : <><Sparkles size={18} aria-hidden="true" /> AI 초안 만들기</>}</button>
     </div>
+    {generating && stage && <p role="status" className="draft-stage">진행 단계: {stage}</p>}
     {requestError && <ErrorMessage>{requestError}</ErrorMessage>}
     {result && <div className="draft-results" aria-live="polite">
       <p><strong>참고 홈페이지:</strong> {url ? <a href={url} target="_blank" rel="noopener noreferrer">{result.source.provider} · {result.source.title} ↗</a> : '출처 확인 필요'} · 확인일 {result.source.checked_at ?? '미확인'}</p>
       <p>{result.source.summary} 일반 홈페이지는 구체적인 제도 내용의 근거가 아닙니다. 실제 내용은 기관에 확인하세요.</p>
+      {result.review && <p><strong>검토:</strong> {result.review.checked_by} 통과 · 작성 시도 {result.review.attempts}회. AI 초안이며 자격·접종 대상·의료 판단이 아닙니다.</p>}
+      {result.trace && result.trace.length > 0 && <details className="draft-trace"><summary>에이전트 실행 기록 보기 ({result.trace.length}단계)</summary><ol>{result.trace.map((entry, index) => <li key={`${index}-${entry.step}`}><span className="trace-agent">{agentLabels[entry.agent] ?? entry.agent}</span>{entry.label} · {entry.detail} <span className="trace-status">[{entry.status}]</span></li>)}</ol></details>}
       {result.evidence && <div className="public-detail"><PublicAttribution source={result.evidence.source} retrievedAt={result.evidence.retrieved_at} /><p>실시간 조회한 감염병 명칭: {result.evidence.items.map((item) => item.name).join(', ')}</p><p>명칭 목록은 개인의 접종 대상이나 의료 판단 근거가 아닙니다.</p></div>}
       {result.drafts.length === 0 && <p>모든 초안을 검토했습니다.</p>}
       {result.drafts.map((draft, index) => <article className="draft-item" key={`${index}-${draft.title}`}><div><h3>{draft.title}</h3><p>{draft.description}</p><p><strong>확인 필요:</strong> {draft.uncertainty}</p></div><div className="draft-actions"><button type="button" className="button button-secondary" onClick={() => onReview(draft, () => setResult((current) => current && ({ ...current, drafts: current.drafts.filter((_, itemIndex) => itemIndex !== index) })))}>검토·수정</button><button type="button" className="text-button" onClick={() => setResult((current) => current && ({ ...current, drafts: current.drafts.filter((_, itemIndex) => itemIndex !== index) }))}>거절</button></div></article>)}

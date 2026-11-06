@@ -1,16 +1,16 @@
+import asyncio
+import json
 import logging
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from agent_framework.exceptions import AgentException
-from copilot._jsonrpc import JsonRpcError, ProcessExitedError
 from fastapi import FastAPI, HTTPException, Path, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import delete, func, insert, select, text, update
 from sqlalchemy.exc import SQLAlchemyError
 
-from backend.agent import AgentBusy, AgentInvalidResponse, AgentUnavailable, CopilotDraftService
+from backend.agent import AgentBusy, AgentInvalidResponse, AgentProviderError, AgentUnavailable, DraftService
 from backend.catalog import MEMBERS, PROFILE, SOURCES
 from backend.database import Database, DatabaseUnavailable, ai_usage, task_activity, tasks
 from backend.public_data import PublicDataBusy, PublicDataError, PublicDataService, PublicDataUnavailable
@@ -20,7 +20,7 @@ DEMO_WARNING = (
     "인증·동의·권한 검증이 없는 공개 가상 시연입니다. "
     "실제 개인정보나 건강정보를 입력하지 마세요. 운영용 서비스가 아닙니다."
 )
-AGENT_REASON = "Copilot 인증과 AI 사용 설정이 필요합니다."
+AGENT_REASON = "AI 사용 설정(CARE_AI_ENABLED)과 CARE_LLM_MODEL, 모델 공급자 인증 설정이 필요합니다."
 logger = logging.getLogger(__name__)
 KNOWN_FIELDS = {
     "body", "path", "query", "task_id", "title", "description", "category", "due_date",
@@ -29,10 +29,10 @@ KNOWN_FIELDS = {
 
 
 def create_app(database=None, draft_service=None, public_data_service=None):
-    app = FastAPI(title="가상 가족 돌봄 시연 API", description=DEMO_WARNING, version="1.0")
+    app = FastAPI(title="가상 가족 돌봄 시연 API", description=DEMO_WARNING, version="1.1")
     app.state.database = database if database is not None else Database()
     app.state.public_data = public_data_service if public_data_service is not None else PublicDataService()
-    app.state.draft_service = draft_service if draft_service is not None else CopilotDraftService(app.state.public_data)
+    app.state.draft_service = draft_service if draft_service is not None else DraftService(app.state.public_data)
     app.state.ai_daily_limit = 10
 
     def record_activity(connection, task_id, kind, detail):
@@ -183,17 +183,18 @@ def create_app(database=None, draft_service=None, public_data_service=None):
 
     @app.get("/api/integrations")
     def integrations():
+        service = app.state.draft_service
+        if hasattr(service, "describe"):
+            reason = service.describe()
+        else:
+            reason = "AI 초안을 사용할 수 있습니다." if service.available else AGENT_REASON
         return {
-            "agent": {
-                "available": app.state.draft_service.available,
-                "reason": "Copilot 설정됨. 초안 생성 시 인증을 확인합니다."
-                if app.state.draft_service.available else AGENT_REASON,
-            },
+            "agent": {"available": service.available, "reason": reason},
             "jira": {"available": False, "reason": "외부 Jira 대신 자체 업무 보드를 사용합니다."},
         }
 
-    @app.post("/api/agent/draft")
-    async def agent_draft(payload: DraftRequest):
+    def reserve_ai_quota():
+        """승인된 가상 분야 요청 1건을 하루 한도에 기록한다. 실패한 시도도 포함한다."""
         if not app.state.draft_service.available:
             raise HTTPException(status_code=503, detail=AGENT_REASON)
         now = datetime.now(timezone.utc)
@@ -206,17 +207,62 @@ def create_app(database=None, draft_service=None, public_data_service=None):
             if count >= app.state.ai_daily_limit:
                 raise HTTPException(status_code=429, detail="공개 시연의 AI 하루 요청 한도에 도달했습니다.")
             connection.execute(insert(ai_usage).values(request_id=uuid4().hex, created_at=now))
+
+    def draft_error(exc):
+        if isinstance(exc, AgentBusy):
+            return 429, "AI 요청이 많습니다. 잠시 후 다시 시도해 주세요."
+        if isinstance(exc, AgentInvalidResponse):
+            return 502, "AI 초안이 검토를 통과하지 못했거나 출처 확인에 실패했습니다. 다시 시도해 주세요."
+        if isinstance(exc, AgentUnavailable):
+            return 503, AGENT_REASON
+        if isinstance(exc, AgentProviderError):
+            return 503, "AI 모델 연결에 실패했습니다. 인증과 모델 설정을 확인해 주세요."
+        logger.warning("Draft failed (%s)", type(exc).__name__)
+        return 503, "AI 초안 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
+
+    @app.post("/api/agent/draft")
+    async def agent_draft(payload: DraftRequest):
+        reserve_ai_quota()
         try:
             return await app.state.draft_service.generate(payload.category)
-        except AgentBusy:
-            raise HTTPException(status_code=429, detail="AI 요청이 많습니다. 잠시 후 다시 시도해 주세요.") from None
-        except AgentInvalidResponse:
-            raise HTTPException(status_code=502, detail="AI 초안이나 출처 확인에 실패했습니다. 다시 시도해 주세요.") from None
-        except AgentUnavailable:
-            raise HTTPException(status_code=503, detail=AGENT_REASON) from None
-        except (AgentException, JsonRpcError, ProcessExitedError, OSError, RuntimeError) as exc:
-            logger.warning("Copilot draft failed (%s)", type(exc).__name__)
-            raise HTTPException(status_code=503, detail="Copilot 연결에 실패했습니다. 인증과 모델 설정을 확인해 주세요.") from None
+        except Exception as exc:
+            status, detail = draft_error(exc)
+            raise HTTPException(status_code=status, detail=detail) from None
+
+    @app.post("/api/agent/draft/stream")
+    async def agent_draft_stream(payload: DraftRequest):
+        """그래프의 단계 진행(step)을 SSE로 보내고 마지막에 result 또는 error 이벤트를 보낸다."""
+        reserve_ai_quota()
+        queue = asyncio.Queue()
+
+        async def on_step(event):
+            await queue.put(("step", event))
+
+        async def run():
+            try:
+                result = await app.state.draft_service.generate(payload.category, on_step=on_step)
+                await queue.put(("result", result))
+            except Exception as exc:
+                status, detail = draft_error(exc)
+                await queue.put(("error", {"status": status, "detail": detail}))
+            finally:
+                await queue.put(None)
+
+        task = asyncio.create_task(run())
+
+        async def events():
+            try:
+                while (item := await queue.get()) is not None:
+                    kind, data = item
+                    yield f"event: {kind}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+            finally:
+                if not task.done():
+                    task.cancel()
+
+        return StreamingResponse(
+            events(), media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     @app.post("/api/public/hospitals")
     async def hospitals(payload: HospitalSearch):
