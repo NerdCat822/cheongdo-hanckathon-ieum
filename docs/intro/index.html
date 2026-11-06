@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>이음 소개자료</title>
+<style>
+  @page { size: 13.333in 7.5in; margin: 0; }
+  :root {
+    --ink: #172f39;
+    --muted: #52656a;
+    --surface: #fffefa;
+    --line: #d7ded9;
+    --green: #245c4b;
+    --green-soft: #e7f2eb;
+    --paper: #f7f5ef;
+    --amber: #8a5a14;
+    --amber-soft: #fbf1dc;
+  }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "NanumBarunGothic", "NanumGothic", "NanumSquare", sans-serif;
+    color: var(--ink);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    line-height: 1.45;
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
+  h1, h2, h3, .brand { font-family: "NanumSquare", "NanumBarunGothic", sans-serif; }
+  .slide {
+    position: relative;
+    width: 13.333in; height: 7.5in;
+    box-sizing: border-box;
+    padding: 0.5in 0.7in 0.55in;
+    background: var(--paper);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    page-break-after: always; break-after: page;
+  }
+  .slide:last-child { page-break-after: auto; break-after: auto; }
+  .eyebrow { font-size: 11.5pt; font-weight: 700; color: var(--green); letter-spacing: 0.02em; margin: 0 0 6pt; }
+  h2 { font-size: 24pt; margin: 0 0 14pt; line-height: 1.25; }
+  h3 { font-size: 13.5pt; margin: 0 0 6pt; color: var(--green); }
+  p, li { font-size: 12.5pt; margin: 0; }
+  .body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .foot {
+    position: absolute; left: 0.7in; right: 0.7in; bottom: 0.28in;
+    display: flex; justify-content: space-between; font-size: 9.5pt; color: var(--muted);
+    border-top: 1px solid var(--line); padding-top: 5pt;
+  }
+  .cards { display: grid; gap: 12pt; }
+  .cols-2 { grid-template-columns: 1fr 1fr; }
+  .cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12pt; padding: 12pt 14pt; }
+  .card.soft { background: var(--green-soft); border-color: #bcd8c8; }
+  .card.warn { background: var(--amber-soft); border-color: #e7d2a4; }
+  .card ul { margin: 0; padding-left: 16pt; }
+  .card li { margin: 3pt 0; font-size: 12pt; }
+  .num { display: inline-flex; width: 22pt; height: 22pt; border-radius: 50%; background: var(--green); color: #fff; font-weight: 700; align-items: center; justify-content: center; font-size: 11.5pt; margin-right: 6pt; }
+  .badge { display: inline-block; padding: 3pt 9pt; border-radius: 999pt; font-size: 10.5pt; font-weight: 700; margin-right: 6pt; }
+  .badge.green { background: var(--green); color: #fff; }
+  .badge.amber { background: var(--amber-soft); color: var(--amber); border: 1px solid #e7d2a4; }
+  .badge.line { background: var(--surface); border: 1px solid var(--line); color: var(--muted); }
+  .note { font-size: 11pt; color: var(--muted); }
+  table { border-collapse: collapse; width: 100%; font-size: 11.5pt; background: var(--surface); }
+  th, td { border: 1px solid var(--line); padding: 6pt 8pt; text-align: left; vertical-align: top; }
+  th { background: var(--green-soft); color: var(--green); font-size: 11pt; }
+  .small { font-size: 10.5pt; }
+  .tight li { margin: 2pt 0; }
+  .roomy li { font-size: 12.5pt; margin: 5pt 0; }
+  .subhead { font-size: 11pt; font-weight: 700; color: var(--amber); margin: 0 0 2pt; }
+  .subhead + ul { margin-bottom: 8pt; }
+
+  /* 표지 */
+  .cover { background: linear-gradient(135deg, #e7f2eb 0%, #f7f5ef 55%, #fffefa 100%); justify-content: center; }
+  .cover .brand { font-size: 64pt; font-weight: 800; color: var(--green); line-height: 1; margin: 10pt 0 14pt; }
+  .cover .tagline { font-size: 19pt; max-width: 11.2in; line-height: 1.4; }
+  .cover .meta { margin-top: 26pt; font-size: 12pt; color: var(--muted); }
+  .cover .badges { margin-top: 18pt; }
+
+  /* 흐름도 */
+  .flow { display: flex; flex-direction: column; gap: 0; }
+  .node { background: var(--surface); border: 1.5px solid var(--line); border-radius: 10pt; padding: 8pt 12pt; font-size: 11.5pt; }
+  .flow .node { padding: 5pt 10pt; font-size: 10.5pt; line-height: 1.35; }
+  .flow .node b { font-size: 11.5pt; margin-bottom: 1pt; }
+  .flow .split .node { padding: 3pt 8pt; margin-top: 2pt; }
+  .flow .arrow { padding: 0; line-height: 1.05; font-size: 10pt; }
+  .flow .arrow .glyph { font-size: 12pt; }
+  .node.agent { border-color: var(--green); background: var(--green-soft); }
+  .node.human { border-color: var(--amber); background: var(--amber-soft); }
+  .node b { display: block; font-size: 12.5pt; margin-bottom: 2pt; }
+  .arrow { text-align: center; color: var(--muted); font-size: 11pt; line-height: 1.15; padding: 2pt 0; }
+  .arrow .glyph { font-size: 14pt; color: var(--green); }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 8pt; }
+  .arch { display: flex; align-items: stretch; gap: 8pt; }
+  .arch .node { flex: 1; }
+  .arch .arrow { align-self: center; padding: 0 2pt; }
+</style>
+</head>
+<body>
+
+<!-- 1. 표지 -->
+<section class="slide cover">
+  <p class="eyebrow">청도 해커톤 · 가족 돌봄 업무 조정 MVP · 소개자료</p>
+  <div class="brand">이음</div>
+  <p class="tagline">부모님 돌봄에 필요한 확인 업무를 찾고, 가족이 역할을 나누며, 진행 상황을 함께 봅니다.</p>
+  <div class="badges">
+    <span class="badge amber">공개 가상 시연 · 실제 서비스 아님</span>
+    <span class="badge line">2026-11-06 기준</span>
+    <span class="badge line">인증·동의·권한은 구현 전</span>
+  </div>
+  <p class="meta">주 사용자: 어르신 본인과 떨어져 사는 가족 · 협력 사용자(계획): 초대된 가족, 어르신 동의를 받은 돌봄관리자</p>
+  <div class="foot"><span>이음 소개자료</span><span>1 / 10</span></div>
+</section>
+
+<!-- 2. 왜 필요한가 -->
+<section class="slide">
+  <p class="eyebrow">왜 필요한가</p>
+  <h2>가족은 돌봄 확인 업무를 여러 곳에서 따로 알아봅니다</h2>
+  <div class="body">
+    <div class="cards cols-2" style="flex:1; align-items: start;">
+      <div>
+        <div class="cards" style="grid-template-columns: 1fr;">
+          <div class="card"><h3><span class="num">1</span>정보가 흩어져 있습니다</h3><p>복지 제도, 예방접종·검진, 방문·안부 확인을 기관별로 따로 찾아야 합니다.</p></div>
+          <div class="card"><h3><span class="num">2</span>담당과 진행 상황을 나누기 어렵습니다</h3><p>누가 무엇을 맡았고 어디까지 했는지 가족 간에 공유되지 않습니다.</p></div>
+          <div class="card"><h3><span class="num">3</span>누락·중복·편중이 생길 수 있습니다</h3><p>같은 일을 두 번 하거나, 아무도 하지 않거나, 한 사람에게 몰립니다.</p></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>설계 가설의 참고 근거</h3>
+        <ul class="tight">
+          <li>노년기 가족 돌봄의 경험과 맥락 · Schulz 외 (2020), Annual Review of Psychology</li>
+          <li>부모 돌봄을 나누는 형제자매 간 스트레스 · Ngangana 외 (2016), Journal of Advanced Nursing</li>
+          <li>가족 돌봄자를 위한 디지털 지원 체계적 문헌고찰 · Zhai 외 (2023), DIGITAL HEALTH</li>
+          <li>고령자·돌봄자 쌍의 모바일 지원 사용성 · Quinn 외 (2019), JMIR Aging</li>
+          <li>지역 배경: 통계청 KOSIS 「고령인구비율(시도/시/군/구)」 표 DT_1YL20631의 청도군 행을 기준 시점과 함께 인용합니다. 수치는 발표 전 원표에서 확인합니다.</li>
+        </ul>
+        <p class="note" style="margin-top:8pt;">문헌과 통계는 설계 참고 근거입니다. 청도 가족의 실제 필요나 이 앱의 효과를 입증하지 않으며, 인터뷰와 사용성 시험으로 확인합니다. 전체 서지는 10쪽에 있습니다.</p>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>공개 가상 시연 · 실제 서비스 아님</span><span>2 / 10</span></div>
+</section>
+
+<!-- 3. 이음이 하는 일 -->
+<section class="slide">
+  <p class="eyebrow">이음이 하는 일</p>
+  <h2>확인 업무는 한곳에, 담당은 수락으로, AI는 초안만</h2>
+  <div class="body">
+    <div class="cards cols-3">
+      <div class="card">
+        <h3><span class="num">1</span>한곳에서 봅니다</h3>
+        <ul>
+          <li>할 일, 출처, 기한, 상태를 한 화면에 모읍니다.</li>
+          <li>분야: 복지·지역 프로그램 확인, 예방접종·검진 확인, 방문·안부 확인</li>
+          <li>상태: 확인 필요 → 담당 요청 → 진행 중 → 완료 / 해당 없음</li>
+          <li>생성·수정·상태·담당 변경 이력을 남깁니다.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="num">2</span>담당은 요청과 수락으로 정합니다</h3>
+        <ul>
+          <li>담당을 일방적으로 지정하지 않습니다.</li>
+          <li>요청받은 가족이 수락·거절·조정합니다.</li>
+          <li>거절·조정하면 미배정으로 남아 대시보드에 드러납니다.</li>
+          <li>상태 규칙은 화면이 아니라 서버 검증과 DB 제약으로 지킵니다. 로그인이 없어 응답자 신원은 확인하지 않습니다.</li>
+          <li>업무 수로 공정성을 점수화하지 않습니다.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="num">3</span>AI는 제안만 합니다</h3>
+        <ul>
+          <li>공식 홈페이지 참고 링크와 공개 데이터를 바탕으로 초안 1~3개를 제안합니다.</li>
+          <li>출처, 조회 시각, 불확실성을 함께 보여줍니다.</li>
+          <li>사용자가 수정·거절·승인하기 전에는 저장되지 않습니다.</li>
+          <li>자격·접종 대상·의료 판단은 하지 않습니다.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="card soft" style="margin-top:14pt;">
+      <p><b>가설</b> · 출처, 다음 행동, 수락된 담당자를 한 화면에 모으면 가족이 업무를 찾고 조율하는 시간이 줄고, 미배정·중복 업무가 더 잘 드러납니다. 사용성 시험으로 확인할 예정이며 아직 입증된 효과는 아닙니다.</p>
+    </div>
+  </div>
+  <div class="foot"><span>공개 가상 시연 · 실제 서비스 아님</span><span>3 / 10</span></div>
+</section>
+
+<!-- 4. 화면 흐름 -->
+<section class="slide">
+  <p class="eyebrow">시연 화면 흐름</p>
+  <h2>할 일을 만들고, 담당을 요청하고, 공개 정보와 AI 초안으로 채웁니다</h2>
+  <div class="body">
+    <div class="cards cols-3">
+      <div class="card"><h3><span class="num">1</span>지금 챙길 일</h3><p>기한 지난 일, 기한 임박, 미배정, 진행 중 업무를 구분해 보여주는 대시보드입니다. 담당자와 진행 상태를 한눈에 확인합니다.</p></div>
+      <div class="card"><h3><span class="num">2</span>할 일 추가·수정</h3><p>제목, 확인할 행동, 분야, 기한, 출처를 기록합니다. 상태 변경과 수정은 변경 이력에 남습니다.</p></div>
+      <div class="card"><h3><span class="num">3</span>담당 요청과 응답</h3><p>가상 가족에게 담당을 요청하면 상태가 <span style="white-space:nowrap">'담당 요청'</span>이 됩니다. 요청받은 사람이 수락하면 <span style="white-space:nowrap">'진행 중'</span>, 거절·조정하면 <span style="white-space:nowrap">'확인 필요'</span>로 돌아갑니다.</p></div>
+      <div class="card"><h3><span class="num">4</span>공공정보 찾아보기</h3><p>병원 검색과 진료과목, 예방접종 대상 감염병 목록과 상세를 공식 API에서 직접 조회합니다. 출처와 조회 시각을 함께 표시합니다.</p></div>
+      <div class="card"><h3><span class="num">5</span>AI로 확인할 일 찾기</h3><p>가상 분야 선택 → 전송 동의 → 단계 진행 표시 → 검토 에이전트를 통과한 초안 확인 → 사용자가 검토·수정 → 저장(승인). 거절한 초안은 사라집니다.</p></div>
+      <div class="card warn"><h3>시연 조건</h3><ul class="tight small"><li>고정된 가상 돌봄 공간과 가상 가족 3명만 사용합니다.</li><li>실제 개인정보는 입력하지 않습니다.</li><li>알림(푸시·문자·이메일)은 보내지 않습니다.</li><li>AI 초안은 전체 사용자 합산 하루 10회로 제한합니다.</li></ul></div>
+    </div>
+    <p class="note" style="margin-top:12pt;">쉬운 화면을 위한 기본: 화면 문구는 짧은 일상 문장으로 쓰고, 건너뛰기 링크, 화면 읽기 프로그램용 숨김 레이블, 상태 변화를 읽어 주는 알림 영역(aria-live), 버튼 선택 상태 표시(aria-pressed), 브라우저 기본 dialog·details 요소를 넣었습니다. 어르신 접근성은 사용자 시험으로 확인할 예정이며 접근성 표준 준수를 뜻하지 않습니다.</p>
+  </div>
+  <div class="foot"><span>공개 가상 시연 · 실제 서비스 아님</span><span>4 / 10</span></div>
+</section>
+
+<!-- 5. AI 멀티 에이전트 구조 -->
+<section class="slide">
+  <p class="eyebrow">AI 초안 구조 · LangGraph 멀티 에이전트</p>
+  <h2>근거 수집 → 초안 작성 → 검토 → 사람 승인</h2>
+  <div class="body">
+    <div class="cards" style="grid-template-columns: 1.7fr 1fr; align-items: start; gap: 10pt;">
+      <div class="flow">
+        <div class="node human"><b>사용자</b>가상 분야를 선택하고 AI 모델 전송에 동의합니다. 자유 입력과 개인정보는 보내지 않습니다.</div>
+        <div class="arrow"><span class="glyph">↓</span></div>
+        <div class="node"><b>근거 수집 노드 (병렬 실행)</b>
+          <div class="split">
+            <div class="node" style="padding:6pt 8pt;">공식 홈페이지 참고 링크 · 확인일 표시</div>
+            <div class="node" style="padding:6pt 8pt;">질병관리청 공개 데이터 · 예방접종 분야 · 조회 시각 표시</div>
+          </div>
+        </div>
+        <div class="arrow">근거가 없거나 조회에 실패하면 여기서 중단합니다 <span class="glyph">↓</span></div>
+        <div class="node agent"><b>초안 작성 에이전트 (LLM)</b>근거 데이터만 받아 submit_drafts 도구로 초안 1~3개를 제출합니다. 예방접종 분야에서만 lookup_vaccine_detail 도구를 쓰며, 인수는 조회된 코드 목록으로 제한하고 최대 3회 호출합니다.</div>
+        <div class="arrow"><span class="glyph">↓</span></div>
+        <div class="node agent"><b>검토 에이전트</b>① 코드 규칙 점검 → ② LLM 검토(submit_review). 통과하지 못하면 지적 사항을 초안 작성 에이전트에 돌려보내 다시 쓰게 합니다(초안 작성은 총 2회까지). 지적 사항은 지시가 아닌 데이터로만 전달합니다. 끝까지 통과하지 못하면 초안을 보여주지 않습니다.</div>
+        <div class="arrow">통과 <span class="glyph">↓</span></div>
+        <div class="node human"><b>사람 승인</b>초안, 근거, 검토 결과, 실행 기록을 보고 사용자가 수정·거절·승인합니다. 승인한 것만 체크리스트에 저장됩니다.</div>
+      </div>
+      <div class="cards" style="grid-template-columns: 1fr; gap: 8pt;">
+        <div class="card"><h3>모델</h3><p class="small">기본 Anthropic Claude Sonnet(claude-sonnet-5-5). LangChain 설정으로 OpenAI·Azure OpenAI로 바꿀 수 있습니다(실제 실행은 Anthropic만 확인). 2026-11-06에 Microsoft Agent Framework·GitHub Copilot SDK 연동을 LangGraph로 교체했습니다.</p></div>
+        <div class="card"><h3>진행 스트리밍</h3><p class="small">에이전트 단계 진행을 SSE(Server-Sent Events, 서버가 단계마다 바로 보내는 스트리밍 방식)로 화면에 표시하고, 완료 후 실행 기록을 열어볼 수 있습니다. 기록에 상담 원문은 없습니다.</p></div>
+        <div class="card"><h3>검증</h3><p class="small">가짜 모델 단위 테스트(도구 인수 검증, 규칙 점검, 반영 루프, 실패 시 중단)와 2026-11-06 실제 모델 실행 확인(복지·예방접종 각 1회, 각 약 9초, 검토 1회 통과).</p></div>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>공개 가상 시연 · 실제 서비스 아님</span><span>5 / 10</span></div>
+</section>
+
+<!-- 6. 책임 있는 AI -->
+<section class="slide">
+  <p class="eyebrow">책임 있는 AI와 개인정보</p>
+  <h2>AI는 초안만 내고, 사람이 결정하고, 최소한의 정보만 다룹니다</h2>
+  <div class="body">
+    <div class="cards cols-2">
+      <div class="card">
+        <h3>AI 사용 원칙</h3>
+        <ul>
+          <li>AI 결과는 항상 초안으로 표시합니다.</li>
+          <li>출처, 확인일·조회 시각, 불확실성을 함께 보여줍니다.</li>
+          <li>복지 자격, 접종 대상, 의료 상태를 판정하지 않고 공식 기관 확인을 안내합니다.</li>
+          <li>사용자가 승인하기 전에는 체크리스트에 반영하지 않습니다.</li>
+          <li>에이전트 도구는 허용 목록으로 제한하고 인수를 검증합니다.</li>
+          <li>사용자 입력, 외부 문서, API 응답은 신뢰하지 않는 데이터로 다루고 그 안의 지시를 따르지 않습니다.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>검토 규칙과 개인정보 보호</h3>
+        <ul>
+          <li>코드 규칙 점검이 자격·대상 판정, 의료 조언, 연락처·날짜 추정, 개인정보 요구, 지시 변경 문구, 근거 밖 링크를 걸러냅니다.</li>
+          <li>검토를 통과하지 못한 초안은 보여주지 않습니다.</li>
+          <li>건강기록, 상세 병력, 복용약, 주민번호, 상세 소득, 신청 서류는 수집·저장하지 않습니다.</li>
+          <li>API 키와 비밀번호는 접근 제한된 환경 설정에만 두고 코드·문서·로그에 넣지 않습니다.</li>
+          <li>로그에는 사용자 ID, 이벤트 종류, 시각만 남기고 개인정보와 상담 원문은 남기지 않습니다.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="card warn" style="margin-top:14pt;">
+      <p class="small">이 지침은 프로젝트 개발 규칙이며, 조직 차원의 AI 관리 시스템 표준인 ISO/IEC 42001 준수나 인증을 뜻하지 않습니다. 실제 사용자 인증·동의·권한 검증은 구현 전이므로 현재는 누구나 같은 가상 데이터를 열람·변경할 수 있습니다. 실제 서비스 전환 전에 인증·동의·권한과 전체 구간 암호화를 구현하고 검증합니다.</p>
+    </div>
+  </div>
+  <div class="foot"><span>공개 가상 시연 · 실제 서비스 아님</span><span>6 / 10</span></div>
+</section>
+
+<!-- 7. 공개 데이터 -->
+<section class="slide">
+  <p class="eyebrow">공개 데이터와 출처</p>
+  <h2>공식 API만, 이용 조건을 확인한 뒤 연결합니다</h2>
+  <div class="body">
+    <table>
+      <thead><tr><th style="width:26%">데이터</th><th style="width:32%">제공</th><th style="width:9%">상태</th><th>쓰임</th></tr></thead>
+      <tbody>
+        <tr><td>병원정보서비스</td><td>건강보험심사평가원 · 공공데이터포털 15001698</td><td>연결</td><td>병원 이름으로 검색</td></tr>
+        <tr><td>의료기관별상세정보서비스</td><td>건강보험심사평가원 · 공공데이터포털 15001699</td><td>연결</td><td>선택한 병원의 진료과목</td></tr>
+        <tr><td>예방접종 대상 감염병 정보</td><td>질병관리청 · 공공데이터포털 15084296</td><td>연결</td><td>감염병 명칭 목록·상세, AI 초안의 근거</td></tr>
+        <tr><td>노인복지시설</td><td>국토교통부 · 공공데이터포털 15056929</td><td>미연결</td><td>호출 조건을 확인하지 못해 공식 안내 링크만 제공</td></tr>
+      </tbody>
+    </table>
+    <div class="cards cols-2" style="margin-top:12pt;">
+      <div class="card">
+        <h3>원칙</h3>
+        <ul class="tight">
+          <li>개인 계정, 신청·수급 데이터는 조회하지 않습니다. 정부24·국민건강보험공단 개인 API는 연결하지 않습니다.</li>
+          <li>비공식 스크래핑을 하지 않습니다.</li>
+          <li>오류, 시간 초과, 오래된 데이터는 그대로 표시하고 성공처럼 꾸미지 않습니다.</li>
+          <li>인증키는 서버에만 두고 브라우저에 보내지 않습니다.</li>
+          <li>공공 API 호출은 10초 시간 제한과 동시 5건·분당 30회 호출 제한을 둡니다.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>참고 링크의 의미</h3>
+        <ul class="tight">
+          <li>복지로, 공공데이터포털, 정부24 홈페이지 링크는 일반 참고 링크입니다.</li>
+          <li>링크 자체는 제도 세부 내용의 검증이나 근거가 아닙니다.</li>
+          <li>모든 안내에 제공 기관, 원문 URL, 마지막 확인일(2026-11-05)을 표시합니다.</li>
+          <li>개인별 자격·접종 대상·의료 결론은 만들지 않습니다.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>공개 가상 시연 · 실제 서비스 아님 · 출처 확인일 2026-11-05</span><span>7 / 10</span></div>
+</section>
+
+<!-- 8. 기술 구조와 배포 -->
+<section class="slide">
+  <p class="eyebrow">기술 구조와 배포</p>
+  <h2>반응형 웹, FastAPI, LangGraph, PostgreSQL을 Azure에 배포했습니다</h2>
+  <div class="body">
+    <div class="arch">
+      <div class="node"><b>브라우저</b>React 19 · TypeScript · 반응형</div>
+      <div class="arrow"><span class="glyph">→</span></div>
+      <div class="node"><b>Azure Container Apps</b>HTTPS 게이트웨이</div>
+      <div class="arrow"><span class="glyph">→</span></div>
+      <div class="node agent"><b>Azure VM · Docker Compose</b>nginx 프론트엔드 · FastAPI 백엔드 · PostgreSQL 17</div>
+      <div class="arrow"><span class="glyph">→</span></div>
+      <div class="node"><b>외부 API</b>모델 공급자(Anthropic 기본) · 공공데이터포털</div>
+    </div>
+    <div class="cards cols-3" style="margin-top:12pt;">
+      <div class="card">
+        <h3>스택</h3>
+        <ul class="tight small">
+          <li>API: Python 3.12, FastAPI, Uvicorn</li>
+          <li>에이전트: LangGraph, LangChain, Pydantic 스키마 검증</li>
+          <li>데이터: PostgreSQL 17, SQLAlchemy, psycopg</li>
+          <li>비밀: 접근 제한된 .env 또는 서비스 환경 설정(Key Vault 미사용)</li>
+          <li>관찰: VM 로그(프롬프트·개인정보 제외)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>검증 (2026-11-06)</h3>
+        <ul class="tight small">
+          <li>백엔드 테스트 32개 실행: 30개 통과, 2개(동시 응답 행 잠금·시드 동시 초기화)는 PostgreSQL 전용으로 건너뜀(미검증)</li>
+          <li>프론트엔드 타입 검사와 빌드 통과</li>
+          <li>Anthropic Claude Sonnet으로 복지·예방접종 초안 각 1회 실제 실행 확인</li>
+          <li>OpenAI·Azure OpenAI 공급자는 설정만 지원, 실행 미검증</li>
+        </ul>
+      </div>
+      <div class="card warn">
+        <h3>공개 URL과 한계</h3>
+        <ul class="tight small">
+          <li>https://ieum.mangostone-78c3018e.eastus.azurecontainerapps.io</li>
+          <li>VM이 중지되면 서비스도 중지됩니다. 게이트웨이가 축소되면 첫 접속이 느릴 수 있습니다.</li>
+          <li>게이트웨이에서 VM까지는 HTTP입니다. 운영 전에 전체 구간 암호화가 필요합니다.</li>
+          <li>Azure OpenAI·Foundry는 필수가 아니며 필요한 서비스만 썼습니다.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>공개 가상 시연 · 실제 서비스 아님</span><span>8 / 10</span></div>
+</section>
+
+<!-- 9. 현재 상태와 다음 단계 -->
+<section class="slide">
+  <p class="eyebrow">현재 상태와 다음 단계</p>
+  <h2>구현한 것과 아직 아닌 것을 구분합니다</h2>
+  <div class="body">
+    <div class="cards cols-3" style="flex:1; align-items: stretch;">
+      <div class="card soft">
+        <h3>구현됨</h3>
+        <ul class="roomy">
+          <li>할 일, 담당 요청·수락, 자체 업무 보드, 변경 이력</li>
+          <li>공공 API 조회: 병원, 진료과목, 예방접종 감염병</li>
+          <li>LangGraph AI 초안과 검토, 단계 진행 스트리밍</li>
+          <li>AI 하루 한도를 DB에 기록</li>
+          <li>Azure 공개 시연 배포</li>
+        </ul>
+      </div>
+      <div class="card warn">
+        <h3>구현 전 · 제외</h3>
+        <p class="subhead">구현 전(계획)</p>
+        <ul class="roomy">
+          <li>실제 사용자 인증·동의·권한(외부 가족 계정용 인증 제품 Entra External ID 검토 중)</li>
+          <li>노인복지시설 API(호출 조건 미확인, 공식 링크만 제공)</li>
+        </ul>
+        <p class="subhead">제외</p>
+        <ul class="roomy">
+          <li>알림 발송(푸시·문자·이메일)</li>
+          <li>외부 Jira, 실제 기관 접수·신청·예약·결제</li>
+          <li>개인별 자격 판정, 정부24·국민건강보험공단 개인 데이터 API</li>
+          <li>건강기록 저장, 응급 감지·구조 보장</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>다음 단계</h3>
+        <ul class="roomy">
+          <li>사용성 시험: 3분 안에 할 일 생성과 담당 요청, 대시보드에서 담당·상태·기한 찾기, 미수락 요청을 미배정으로 이해하는지 확인</li>
+          <li>시험 전후 업무 정리 시간, 중복·미배정 업무 수 비교. 초기 결과를 일반적 효과로 과장하지 않음</li>
+          <li>Entra 인증·초대·비용 검증</li>
+          <li>OpenAI·Azure OpenAI 공급자 실행 검증</li>
+          <li>보존·삭제 정책, 동의 철회, 비용·로그 설정 확정</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>공개 가상 시연 · 실제 서비스 아님</span><span>9 / 10</span></div>
+</section>
+
+<!-- 10. 참고문헌 -->
+<section class="slide">
+  <p class="eyebrow">참고문헌과 자료</p>
+  <h2>출처</h2>
+  <div class="body">
+    <div class="cards cols-2" style="align-items:start;">
+      <div class="card">
+        <h3>연구</h3>
+        <ul class="tight small">
+          <li>Schulz, R. et al. (2020). “Family Caregiving for Older Adults.” Annual Review of Psychology, 71, 635–659. https://doi.org/10.1146/annurev-psych-010419-050754</li>
+          <li>Ngangana, P. C. et al. (2016). “Intra-family stressors among adult siblings sharing caregiving for parents.” Journal of Advanced Nursing, 72(12), 3169–3181. https://doi.org/10.1111/jan.13065</li>
+          <li>Zhai, S. et al. (2023). “Digital health interventions to support family caregivers: An updated systematic review.” DIGITAL HEALTH, 9. https://doi.org/10.1177/20552076231171967</li>
+          <li>Quinn, C. C. et al. (2019). “Mobile Support for Older Adults and Their Caregivers: Dyad Usability Study.” JMIR Aging, 2(1), e12276. https://doi.org/10.2196/12276</li>
+        </ul>
+        <p class="note" style="margin-top:8pt;">논문과 통계는 설계 참고 근거이며 청도 지역 수요나 제품 효과의 직접 증거가 아닙니다.</p>
+      </div>
+      <div class="card">
+        <h3>통계 · 공공 데이터 · 기술</h3>
+        <ul class="tight small">
+          <li>통계청 KOSIS 「고령인구비율(시도/시/군/구)」 표 ID DT_1YL20631. https://kosis.kr/statHtml/statHtml.do?orgId=101&amp;tblId=DT_1YL20631 (조회일 2026-11-05. 인용 시 청도군 행, 기준 시점, 분모·분자 정의와 조회일을 함께 기록)</li>
+          <li>공공데이터포털 API(확인일 2026-11-05): https://www.data.go.kr/data/15001698/openapi.do · 15001699 · 15084296 · 15056929</li>
+          <li>LangGraph: https://github.com/langchain-ai/langgraph · LangChain: https://github.com/langchain-ai/langchain (확인일 2026-11-06)</li>
+          <li>Anthropic Claude API 문서: https://platform.claude.com/docs (확인일 2026-11-06)</li>
+          <li>ISO. ISO/IEC 42001:2023 개요: https://www.iso.org/standard/42001 (확인일 2026-11-05)</li>
+          <li>저장소: https://github.com/NerdCat822/cheongdo-hanckathon-ieum · 제품 범위 PRD.md, 기술 설계 TRD.md, 결정과 근거 TDD.md</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="foot"><span>공개 가상 시연 · 실제 서비스 아님 · 2026-11-06</span><span>10 / 10</span></div>
+</section>
+
+</body>
+</html>
